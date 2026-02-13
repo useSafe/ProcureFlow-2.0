@@ -1192,7 +1192,7 @@ const ProcurementList: React.FC = () => {
                                     <TableHead className="text-center text-slate-300 w-[80px]">Stack #</TableHead>
                                     <TableHead className="text-slate-300">Storage Unit</TableHead>
                                     <TableHead className="text-slate-300">Progress</TableHead>
-                                    {!isFolderView && <TableHead className="text-slate-300">Status</TableHead>}
+                                    <TableHead className="text-slate-300">Status</TableHead>
                                     <TableHead className="text-slate-300">Procurement Date</TableHead>
                                     <TableHead className="text-right text-slate-300">Actions</TableHead>
                                 </TableRow>
@@ -1286,31 +1286,29 @@ const ProcurementList: React.FC = () => {
                                                     </div>
                                                 )}
                                             </TableCell>
-                                            {!isFolderView && (
-                                                <TableCell>
-                                                    {procurement.procurementType === 'Attendance Sheets' ? (
-                                                        <span className="text-slate-500">N/A</span>
-                                                    ) : (
-                                                        <Select
-                                                            value={procurement.status}
-                                                            onValueChange={(value) => handleStatusChange(procurement, value as ProcurementStatus)}
-                                                        >
-                                                            <SelectTrigger className={`w-[130px] border ${procurement.status === 'active'
-                                                                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                                                                : 'bg-slate-700/50 text-slate-300 border-slate-700'
-                                                                }`}>
-                                                                <SelectValue>
-                                                                    {procurement.status === 'active' ? 'Borrowed' : 'Archived'}
-                                                                </SelectValue>
-                                                            </SelectTrigger>
-                                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                                <SelectItem value="active" className="text-orange-400 focus:text-orange-400">Borrowed</SelectItem>
-                                                                <SelectItem value="archived" className="text-slate-300 focus:text-white">Archived</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    )}
-                                                </TableCell>
-                                            )}
+                                            <TableCell>
+                                                {procurement.procurementType === 'Attendance Sheets' ? (
+                                                    <span className="text-slate-500">N/A</span>
+                                                ) : (
+                                                    <Select
+                                                        value={procurement.status}
+                                                        onValueChange={(value) => handleStatusChange(procurement, value as ProcurementStatus)}
+                                                    >
+                                                        <SelectTrigger className={`w-[130px] border ${procurement.status === 'active'
+                                                            ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                                            : 'bg-slate-700/50 text-slate-300 border-slate-700'
+                                                            }`}>
+                                                            <SelectValue>
+                                                                {procurement.status === 'active' ? 'Borrowed' : 'Archived'}
+                                                            </SelectValue>
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                            <SelectItem value="active" className="text-orange-400 focus:text-orange-400">Borrowed</SelectItem>
+                                                            <SelectItem value="archived" className="text-slate-300 focus:text-white">Archived</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {procurement.procurementDate ? format(new Date(procurement.procurementDate), 'MMM d, yyyy') : '-'}
                                             </TableCell>

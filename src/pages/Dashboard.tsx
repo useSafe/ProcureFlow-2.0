@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
 
   // Shelf statistics (cabinetId in procurement points to Shelf)
   const shelfStats = useMemo(() => {
-    // 1. Calculate stats for Shelves (TIER 1)
+    // 1. Calculate stats for Shelves (TIER 1) ONLY
     const shelfData = cabinets.map(shelf => ({
       id: shelf.id,
       name: shelf.name,
@@ -66,20 +66,8 @@ const Dashboard: React.FC = () => {
       count: (procurements || []).filter(p => p.cabinetId === shelf.id).length
     }));
 
-    // 2. Calculate stats for Boxes (TIER 1 - Direct)
-    // Map each box to a data point
-    const boxData = boxes.map(box => ({
-      id: box.id,
-      name: box.name,
-      code: box.code,
-      count: (procurements || []).filter(p => p.boxId === box.id).length
-    }));
-
-    // Combine and sort
-    const combinedData = [...shelfData, ...boxData];
-
-    return combinedData.filter(s => s.count > 0).sort((a, b) => b.count - a.count);
-  }, [cabinets, boxes, procurements]);
+    return shelfData.filter(s => s.count > 0).sort((a, b) => b.count - a.count);
+  }, [cabinets, procurements]);
 
   // Calculate detailed hierarchy data for the unified chart
   const hierarchyData = useMemo(() => {
@@ -93,23 +81,9 @@ const Dashboard: React.FC = () => {
       // Tier 4: Files in these Tier 3 Folders
       const validFiles = procurements.filter(p => validFolders.some(f => f.id === p.folderId));
 
-      // Boxes: Boxes in this Tier 1 Shelf (assuming visual association or direct link if any, 
-      // but usually boxes are standalone or linked. If standalone, we might need a separate 'Box Storage' bar.
-      // However, if the user wants 'Box's Files records in Top Shelves', it might mean counting files in boxes?
-      // "include Box's Files records in Top Shelves by Files and Storage Hierarchy Overview"
-      // Interpretation: 
-      // 1. Storage Hierarchy: Show distinct counts for Shelf Hierarchy vs Box Hierarchy? 
-      //    Or just add a 'Boxes' count to the general stats. 
-      //    Since hierarchyData is mapped by 'shelf', and Boxes might not be inside shelves in this DB schema (they are root?),
-      //    we might need to adjust the chart to show 'Shelves' vs 'Boxes' on X-Axis?
-      //    BUT, the current chart X-Axis is 'Shelf Name'.
-      //    If Boxes are separate, they can't be mapped to a specific Shelf unless we have 'shelfId' on Box.
-      //    The `Box` type has `id`, `name`, `code`, `description`. No `shelfId`. So Boxes are root level.
-      //    
-      //    ADJUSTMENT: We will add a "Boxes" entry to the hierarchyData array effectively treating "Box Storage" as a pseudo-shelf for visualization.
-
       return {
         name: shelf.code,
+        Shelves: 1, // Represents the Shelf itself
         Cabinets: validCabinets.length,
         Folders: validFolders.length,
         Files: validFiles.length,
@@ -118,10 +92,11 @@ const Dashboard: React.FC = () => {
       };
     }).concat(boxes.map(box => ({
       name: box.code,
+      Shelves: 0,
       Cabinets: 0,
       Folders: 0,
       Files: procurements.filter(p => p.boxId === box.id).length,
-      Boxes: 1,
+      Boxes: 1, // Represents the Box itself
       type: 'box'
     })));
 
@@ -641,8 +616,8 @@ const Dashboard: React.FC = () => {
             <div className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hierarchyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <XAxis dataKey="name" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
+                  <YAxis stroke="#94a3b8" fontSize={12} />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
@@ -652,33 +627,48 @@ const Dashboard: React.FC = () => {
                             <p className="font-semibold text-white mb-2">{label}</p>
                             {data.type === 'box' ? (
                               <div className="space-y-1">
-                                <p className="text-sm text-slate-300">
-                                  <span className="inline-block w-3 h-3 rounded-full bg-amber-500 mr-2"></span>
-                                  Files: <span className="text-white font-bold">{data.Files}</span>
+                                <p className="text-sm text-slate-300 flex items-center">
+                                  <span className="w-2 h-2 rounded-full bg-[#db2777] mr-2"></span>
+                                  Boxes: <span className="text-white font-bold ml-1">{data.Boxes}</span>
+                                </p>
+                                <p className="text-sm text-slate-300 flex items-center">
+                                  <span className="w-2 h-2 rounded-full bg-[#10b981] mr-2"></span>
+                                  Files: <span className="text-white font-bold ml-1">{data.Files}</span>
                                 </p>
                               </div>
                             ) : (
-                              payload.map((entry: any, index: number) => (
-                                <div key={index} className="space-y-1">
-                                  <p className="text-sm text-slate-300" style={{ color: entry.color }}>
-                                    <span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: entry.color }}></span>
-                                    {entry.name}: <span className="text-white font-bold">{entry.value}</span>
-                                  </p>
-                                </div>
-                              ))
+                              <div className="space-y-1">
+                                <p className="text-sm text-slate-300 flex items-center">
+                                  <span className="w-2 h-2 rounded-full bg-[#2563eb] mr-2"></span>
+                                  Shelves: <span className="text-white font-bold ml-1">1</span>
+                                </p>
+                                <p className="text-sm text-slate-300 flex items-center">
+                                  <span className="w-2 h-2 rounded-full bg-[#9333ea] mr-2"></span>
+                                  Cabinets: <span className="text-white font-bold ml-1">{data.Cabinets}</span>
+                                </p>
+                                <p className="text-sm text-slate-300 flex items-center">
+                                  <span className="w-2 h-2 rounded-full bg-[#d97706] mr-2"></span>
+                                  Folders: <span className="text-white font-bold ml-1">{data.Folders}</span>
+                                </p>
+                                <p className="text-sm text-slate-300 flex items-center">
+                                  <span className="w-2 h-2 rounded-full bg-[#10b981] mr-2"></span>
+                                  Files: <span className="text-white font-bold ml-1">{data.Files}</span>
+                                </p>
+                              </div>
                             )}
                           </div>
                         );
                       }
                       return null;
                     }}
-                    cursor={{ fill: '#334155', opacity: 0.4 }}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                   />
-                  <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                  <Bar dataKey="Cabinets" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Cabinets" />
-                  <Bar dataKey="Folders" fill="#10b981" radius={[4, 4, 0, 0]} name="Files" /> {/* Folders was Files color in summary, swapping to match */}
-                  <Bar dataKey="Files" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Files" />
-                  <Bar dataKey="Boxes" fill="#6366f1" radius={[4, 4, 0, 0]} name="Boxes" />
+                  <Legend />
+                  <Bar dataKey="Shelves" name="Shelves" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Cabinets" name="Cabinets" fill="#9333ea" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Folders" name="Folders" fill="#d97706" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Files" name="Files" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Boxes" name="Boxes" fill="#db2777" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

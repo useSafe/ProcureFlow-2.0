@@ -365,7 +365,7 @@ export const addProcurement = async (
         createdAt: now,
         updatedAt: now,
         // If adding directly to stack (archived), set stackOrderDate
-        stackOrderDate: safeProcurement.status === 'archived' ? Date.now() : undefined,
+        ...(safeProcurement.status === 'archived' ? { stackOrderDate: Date.now() } : {}),
     };
 
     await set(ref(db, 'procurements/' + id), newProcurement);

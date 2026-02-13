@@ -179,16 +179,30 @@ const AddProcurement: React.FC = () => {
 
     // Derived PR Number
     const selectedDivision = divisions.find(d => d.id === selectedDivisionId);
-    // Format: DIV-MMM-YY-SEQ (e.g., IT-FEB-26-001)
-    const generatedPRNumber = `${selectedDivision ? selectedDivision.abbreviation : 'XXX'}-${prMonth}-${prYear}-${prSequence}`;
+
+    // Helper to check if type is special (hides extra fields)
+    const isSpecialType = ['Attendance Sheets', 'Receipt', 'Others'].includes(procurementType);
+
+    // Format: DIV-MMM-YY-SEQ (e.g., IT-FEB-26-001) OR 'N/A' for special types
+    const generatedPRNumber = isSpecialType
+        ? 'N/A'
+        : `${selectedDivision ? selectedDivision.abbreviation : 'XXX'}-${prMonth}-${prYear}-${prSequence}`;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         // Validation
-        if (!selectedDivisionId || !prSequence || !description) {
-            toast.error('Please fill in all required fields (Division, Sequence, Description)');
+        if (!description) {
+            toast.error('Description is required');
             return;
+        }
+
+        // Only validate Division/Sequence for regular types
+        if (!isSpecialType) {
+            if (!selectedDivisionId || !prSequence) {
+                toast.error('Please fill in all required fields (Division, Sequence)');
+                return;
+            }
         }
 
         if (storageMode === 'shelf' && (!cabinetId || !shelfId || !folderId)) {
@@ -212,7 +226,7 @@ const AddProcurement: React.FC = () => {
                 description,
                 projectName,
                 procurementType,
-                division: selectedDivision?.name, // Store Name
+                division: selectedDivision?.name || 'N/A', // Store Name or N/A
 
                 // Location
                 cabinetId: storageMode === 'shelf' ? cabinetId : undefined,
@@ -220,15 +234,15 @@ const AddProcurement: React.FC = () => {
                 folderId: storageMode === 'shelf' ? folderId : undefined,
                 boxId: storageMode === 'box' ? boxId : undefined,
 
-                status,
-                progressStatus,
+                status, // User can now select status for all types
+                progressStatus: isSpecialType ? 'Pending' : progressStatus, // Default to Pending if hidden
                 urgencyLevel: 'medium',
                 dateAdded: dateAdded ? dateAdded.toISOString() : new Date().toISOString(),
                 procurementDate: (procDateMonth && procDateDay && procDateYear)
                     ? new Date(`${procDateMonth} ${procDateDay}, ${procDateYear}`).toISOString()
                     : undefined,
                 disposalDate,
-                checklist: procurementType === 'Regular Bidding' ? checklist : undefined,
+                checklist: (!isSpecialType && procurementType === 'Regular Bidding') ? checklist : undefined,
                 tags: [],
             };
 
@@ -295,28 +309,27 @@ const AddProcurement: React.FC = () => {
                                         className="bg-[#1e293b] border-slate-700 text-white placeholder:text-slate-500"
                                     />
                                 </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-slate-300">Division</Label>
+                                    <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
+                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                            <SelectValue placeholder="Select Division" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                            {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
+                                                <SelectItem key={div.id} value={div.id}>{div.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
 
                             {/* PR Number Construction - Conditional */}
-                            {/* PR Number Construction - Conditional */}
-                            {procurementType !== 'Attendance Sheets' && (
+                            {!isSpecialType && (
                                 <div className="p-4 rounded-lg bg-[#1e293b]/50 border border-slate-700/50 space-y-4">
                                     <Label className="text-slate-300">PR Number Construction</Label>
-                                    <div className="grid gap-4 md:grid-cols-4 items-end">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs text-slate-400">Division</Label>
-                                            <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
-                                                <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                    <SelectValue placeholder="Select Division" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                    {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
-                                                        <SelectItem key={div.id} value={div.id}>{div.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
+                                    <div className="grid gap-4 md:grid-cols-3 items-end">
                                         <div className="space-y-2">
                                             <Label className="text-xs text-slate-400">Month</Label>
                                             <Select value={prMonth} onValueChange={setPrMonth}>
@@ -430,8 +443,7 @@ const AddProcurement: React.FC = () => {
                     </Card>
 
                     {/* Checklist (Conditional) */}
-                    {/* Checklist (Conditional) */}
-                    {procurementType !== 'Attendance Sheets' && (
+                    {!isSpecialType && (
                         <Card className="border-none bg-[#0f172a] shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
                             <CardContent className="p-6 space-y-4">
                                 <div>
@@ -615,21 +627,21 @@ const AddProcurement: React.FC = () => {
                                 </div>
                             )}
 
-                            {procurementType !== 'Attendance Sheets' && (
-                                <div className="grid gap-4 md:grid-cols-2 border-t border-slate-700 pt-4 mt-2">
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Current Status</Label>
-                                        <Select value={status} onValueChange={(val) => setStatus(val as ProcurementStatus)}>
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectItem value="archived" className="text-white">Archived</SelectItem>
-                                                <SelectItem value="active" className="text-white">Borrowed</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                            <div className="grid gap-4 md:grid-cols-2 border-t border-slate-700 pt-4 mt-2">
+                                <div className="space-y-2">
+                                    <Label className="text-slate-300">Current Status</Label>
+                                    <Select value={status} onValueChange={(val) => setStatus(val as ProcurementStatus)}>
+                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                            <SelectItem value="archived" className="text-white">Archived</SelectItem>
+                                            <SelectItem value="active" className="text-white">Borrowed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
+                                {!isSpecialType && (
                                     <div className="space-y-2">
                                         <Label className="text-slate-300">Progress Status</Label>
                                         <Select value={progressStatus} onValueChange={(val) => setProgressStatus(val as ProgressStatus)}>
@@ -644,8 +656,8 @@ const AddProcurement: React.FC = () => {
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
 
