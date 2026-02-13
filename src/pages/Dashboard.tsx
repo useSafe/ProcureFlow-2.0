@@ -46,7 +46,7 @@ const Dashboard: React.FC = () => {
 
   const metrics = useMemo(() => {
     return {
-      totalRecords: (procurements || []).length,
+      // totalRecords: (procurements || []).length,
       active: (procurements || []).filter(p => p.status === 'active').length,
       archived: (procurements || []).filter(p => p.status === 'archived').length,
       totalShelves: cabinets.length,
