@@ -222,14 +222,14 @@ const Dashboard: React.FC = () => {
       text: 'text-white',
       description: 'Storage Boxes'
     },
-    {
-      title: 'Total Records',
-      value: metrics.totalRecords,
-      icon: FileText,
-      bg: 'bg-emerald-600',
-      text: 'text-white',
-      description: 'All files'
-    },
+    // {
+    //   title: 'Total Records',
+    //   value: metrics.totalRecords,
+    //   icon: FileText,
+    //   bg: 'bg-emerald-600',
+    //   text: 'text-white',
+    //   description: 'All files'
+    // },
   ];
 
   const statusCards = [
