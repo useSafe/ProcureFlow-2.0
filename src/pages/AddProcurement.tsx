@@ -44,7 +44,7 @@ const MONTHS = [
 
 const PROCUREMENT_TYPES = [
     'Regular Bidding',
-    'SVP',
+    'SVP(Small Value Procurement)',
     'Attendance Sheets',
     'Receipt',
     'Others'
@@ -356,7 +356,7 @@ const AddProcurement: React.FC = () => {
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label className="text-slate-300">Procurement Date (Date Published)</Label>
+                                    <Label className="text-slate-300">Procurement Date (Date Received)</Label>
                                     <div className="grid grid-cols-3 gap-2">
                                         <Select value={procDateMonth} onValueChange={setProcDateMonth}>
                                             <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
