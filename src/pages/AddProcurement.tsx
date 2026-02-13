@@ -44,7 +44,7 @@ const MONTHS = [
 
 const PROCUREMENT_TYPES = [
     'Regular Bidding',
-    'SVP(Small Value Procurement)',
+    'Small Value Procurement(SVP)',
     'Attendance Sheets',
     'Receipt',
     'Others'
