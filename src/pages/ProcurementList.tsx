@@ -1057,7 +1057,7 @@ const ProcurementList: React.FC = () => {
                                     <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
                                         <SelectItem value="all_types">All Types</SelectItem>
                                         <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                        <SelectItem value="SVP(Small Value Procurement)">SVP(Small Value Procurement)</SelectItem>
+                                        <SelectItem value="Small Value Procurement(SVP)">Small Value Procurement(SVP)</SelectItem>
                                         <SelectItem value="Attendance Sheets">Attendance Sheets</SelectItem>
                                         <SelectItem value="Receipt">Receipt</SelectItem>
                                         <SelectItem value="Others">Others</SelectItem>
@@ -1157,9 +1157,9 @@ const ProcurementList: React.FC = () => {
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
                                                         Regular Bidding
                                                     </span>
-                                                ) : procurement.procurementType === 'SVP' ? (
+                                                ) : procurement.procurementType === 'Small Value Procurement(SVP)' ? (
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                                        SVP
+                                                        Small Value Procurement(SVP)
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
