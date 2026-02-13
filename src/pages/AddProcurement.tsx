@@ -297,62 +297,65 @@ const AddProcurement: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* PR Number Construction */}
-                            <div className="p-4 rounded-lg bg-[#1e293b]/50 border border-slate-700/50 space-y-4">
-                                <Label className="text-slate-300">PR Number Construction</Label>
-                                <div className="grid gap-4 md:grid-cols-4 items-end">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs text-slate-400">Division</Label>
-                                        <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue placeholder="Select Division" />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
-                                                    <SelectItem key={div.id} value={div.id}>{div.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                            {/* PR Number Construction - Conditional */}
+                            {/* PR Number Construction - Conditional */}
+                            {procurementType !== 'Attendance Sheets' && (
+                                <div className="p-4 rounded-lg bg-[#1e293b]/50 border border-slate-700/50 space-y-4">
+                                    <Label className="text-slate-300">PR Number Construction</Label>
+                                    <div className="grid gap-4 md:grid-cols-4 items-end">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-slate-400">Division</Label>
+                                            <Select value={selectedDivisionId} onValueChange={setSelectedDivisionId}>
+                                                <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                    <SelectValue placeholder="Select Division" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                    {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
+                                                        <SelectItem key={div.id} value={div.id}>{div.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-xs text-slate-400">Month</Label>
-                                        <Select value={prMonth} onValueChange={setPrMonth}>
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
-                                                {MONTHS.map(m => (
-                                                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-slate-400">Month</Label>
+                                            <Select value={prMonth} onValueChange={setPrMonth}>
+                                                <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
+                                                    {MONTHS.map(m => (
+                                                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-xs text-slate-400">Year (YY)</Label>
-                                        <Input
-                                            type="text"
-                                            maxLength={2}
-                                            value={prYear}
-                                            onChange={(e) => setPrYear(e.target.value)}
-                                            className="bg-[#1e293b] border-slate-700 text-white"
-                                        />
-                                    </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-slate-400">Year (YY)</Label>
+                                            <Input
+                                                type="text"
+                                                maxLength={2}
+                                                value={prYear}
+                                                onChange={(e) => setPrYear(e.target.value)}
+                                                className="bg-[#1e293b] border-slate-700 text-white"
+                                            />
+                                        </div>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-xs text-slate-400">Sequence</Label>
-                                        <Input
-                                            value={prSequence}
-                                            onChange={(e) => setPrSequence(e.target.value)}
-                                            className="bg-[#1e293b] border-slate-700 text-white"
-                                        />
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-slate-400">Sequence</Label>
+                                            <Input
+                                                value={prSequence}
+                                                onChange={(e) => setPrSequence(e.target.value)}
+                                                className="bg-[#1e293b] border-slate-700 text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 text-sm text-slate-400">
+                                        Preview: <span className="font-mono text-emerald-400 font-bold ml-2">{generatedPRNumber}</span>
                                     </div>
                                 </div>
-                                <div className="mt-2 text-sm text-slate-400">
-                                    Preview: <span className="font-mono text-emerald-400 font-bold ml-2">{generatedPRNumber}</span>
-                                </div>
-                            </div>
+                            )}
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
@@ -427,7 +430,8 @@ const AddProcurement: React.FC = () => {
                     </Card>
 
                     {/* Checklist (Conditional) */}
-                    {procurementType === 'Regular Bidding' && (
+                    {/* Checklist (Conditional) */}
+                    {procurementType !== 'Attendance Sheets' && (
                         <Card className="border-none bg-[#0f172a] shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
                             <CardContent className="p-6 space-y-4">
                                 <div>
@@ -462,7 +466,7 @@ const AddProcurement: React.FC = () => {
                                     </div>
                                     <p className="text-sm text-slate-400">Required documents for Regular Bidding</p>
                                 </div>
-                                <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                     {[
                                         { key: 'noticeToProceed', label: 'A. Notice to Proceed' },
                                         { key: 'biddersTechFinancialProposals', label: 'L. Bidders Technical and Financial Proposals' },
@@ -611,58 +615,60 @@ const AddProcurement: React.FC = () => {
                                 </div>
                             )}
 
-                            <div className="grid gap-4 md:grid-cols-2 border-t border-slate-700 pt-4 mt-2">
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Current Status</Label>
-                                    <Select value={status} onValueChange={(val) => setStatus(val as ProcurementStatus)}>
-                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectItem value="archived" className="text-white">Archived</SelectItem>
-                                            <SelectItem value="active" className="text-white">Borrowed</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                            {procurementType !== 'Attendance Sheets' && (
+                                <div className="grid gap-4 md:grid-cols-2 border-t border-slate-700 pt-4 mt-2">
+                                    <div className="space-y-2">
+                                        <Label className="text-slate-300">Current Status</Label>
+                                        <Select value={status} onValueChange={(val) => setStatus(val as ProcurementStatus)}>
+                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectItem value="archived" className="text-white">Archived</SelectItem>
+                                                <SelectItem value="active" className="text-white">Borrowed</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
 
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Progress Status</Label>
-                                    <Select value={progressStatus} onValueChange={(val) => setProgressStatus(val as ProgressStatus)}>
-                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectItem value="Pending" className="text-yellow-400">Pending</SelectItem>
-                                            <SelectItem value="Success" className="text-emerald-400">Success</SelectItem>
-                                            <SelectItem value="Failed" className="text-red-400">Failed</SelectItem>
-                                            <SelectItem value="Cancelled" className="text-slate-400">Cancelled</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <div className="space-y-2">
+                                        <Label className="text-slate-300">Progress Status</Label>
+                                        <Select value={progressStatus} onValueChange={(val) => setProgressStatus(val as ProgressStatus)}>
+                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectItem value="Pending" className="text-yellow-400">Pending</SelectItem>
+                                                <SelectItem value="Success" className="text-emerald-400">Success</SelectItem>
+                                                <SelectItem value="Failed" className="text-red-400">Failed</SelectItem>
+                                                <SelectItem value="Cancelled" className="text-slate-400">Cancelled</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
-                            </div>
-
-                            <Button
-                                type="submit"
-                                disabled={isLoading}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-4"
-                            >
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="mr-2 h-4 w-4" />
-                                        Save Record
-                                    </>
-                                )}
-                            </Button>
+                            )}
                         </CardContent>
                     </Card>
+
+                    <Button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-4"
+                    >
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            <>
+                                <Save className="mr-2 h-4 w-4" />
+                                Save Record
+                            </>
+                        )}
+                    </Button>
                 </div>
-            </form>
-        </div>
+            </form >
+        </div >
     );
 };
 

@@ -58,17 +58,32 @@ const Dashboard: React.FC = () => {
 
   // Shelf statistics (cabinetId in procurement points to Shelf)
   const shelfStats = useMemo(() => {
-    return cabinets.map(shelf => ({
+    // 1. Calculate stats for Shelves (TIER 1)
+    const shelfData = cabinets.map(shelf => ({
       id: shelf.id,
       name: shelf.name,
       code: shelf.code,
       count: (procurements || []).filter(p => p.cabinetId === shelf.id).length
-    })).filter(s => s.count > 0).sort((a, b) => b.count - a.count);
-  }, [cabinets, procurements]);
+    }));
+
+    // 2. Calculate stats for Boxes (TIER 1 - Direct)
+    // Map each box to a data point
+    const boxData = boxes.map(box => ({
+      id: box.id,
+      name: box.name,
+      code: box.code,
+      count: (procurements || []).filter(p => p.boxId === box.id).length
+    }));
+
+    // Combine and sort
+    const combinedData = [...shelfData, ...boxData];
+
+    return combinedData.filter(s => s.count > 0).sort((a, b) => b.count - a.count);
+  }, [cabinets, boxes, procurements]);
 
   // Calculate detailed hierarchy data for the unified chart
   const hierarchyData = useMemo(() => {
-    return cabinets.map(shelf => {
+    const data = cabinets.map(shelf => {
       // Tier 2: Cabinets in this Tier 1 Shelf
       const validCabinets = shelves.filter(c => c.cabinetId === shelf.id);
 
@@ -78,14 +93,41 @@ const Dashboard: React.FC = () => {
       // Tier 4: Files in these Tier 3 Folders
       const validFiles = procurements.filter(p => validFolders.some(f => f.id === p.folderId));
 
+      // Boxes: Boxes in this Tier 1 Shelf (assuming visual association or direct link if any, 
+      // but usually boxes are standalone or linked. If standalone, we might need a separate 'Box Storage' bar.
+      // However, if the user wants 'Box's Files records in Top Shelves', it might mean counting files in boxes?
+      // "include Box's Files records in Top Shelves by Files and Storage Hierarchy Overview"
+      // Interpretation: 
+      // 1. Storage Hierarchy: Show distinct counts for Shelf Hierarchy vs Box Hierarchy? 
+      //    Or just add a 'Boxes' count to the general stats. 
+      //    Since hierarchyData is mapped by 'shelf', and Boxes might not be inside shelves in this DB schema (they are root?),
+      //    we might need to adjust the chart to show 'Shelves' vs 'Boxes' on X-Axis?
+      //    BUT, the current chart X-Axis is 'Shelf Name'.
+      //    If Boxes are separate, they can't be mapped to a specific Shelf unless we have 'shelfId' on Box.
+      //    The `Box` type has `id`, `name`, `code`, `description`. No `shelfId`. So Boxes are root level.
+      //    
+      //    ADJUSTMENT: We will add a "Boxes" entry to the hierarchyData array effectively treating "Box Storage" as a pseudo-shelf for visualization.
+
       return {
         name: shelf.code,
         Cabinets: validCabinets.length,
         Folders: validFolders.length,
-        Files: validFiles.length
+        Files: validFiles.length,
+        Boxes: 0,
+        type: 'shelf'
       };
-    });
-  }, [cabinets, shelves, folders, procurements]);
+    }).concat(boxes.map(box => ({
+      name: box.code,
+      Cabinets: 0,
+      Folders: 0,
+      Files: procurements.filter(p => p.boxId === box.id).length,
+      Boxes: 1,
+      type: 'box'
+    })));
+
+    // Sort by Files (Descending) and limit to Top 10
+    return data.sort((a, b) => b.Files - a.Files).slice(0, 10);
+  }, [cabinets, shelves, folders, procurements, boxes]);
 
   const pieData = [
     { name: 'Borrowed', value: metrics.active, fill: '#f59e0b' },
@@ -503,8 +545,8 @@ const Dashboard: React.FC = () => {
                       data={progressData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
+                      innerRadius={70}
+                      outerRadius={100}
                       paddingAngle={5}
                       dataKey="value"
                       stroke="none"
@@ -602,13 +644,41 @@ const Dashboard: React.FC = () => {
                   <XAxis dataKey="name" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-[#1e293b] border border-slate-700 p-3 rounded-lg shadow-xl">
+                            <p className="font-semibold text-white mb-2">{label}</p>
+                            {data.type === 'box' ? (
+                              <div className="space-y-1">
+                                <p className="text-sm text-slate-300">
+                                  <span className="inline-block w-3 h-3 rounded-full bg-amber-500 mr-2"></span>
+                                  Files: <span className="text-white font-bold">{data.Files}</span>
+                                </p>
+                              </div>
+                            ) : (
+                              payload.map((entry: any, index: number) => (
+                                <div key={index} className="space-y-1">
+                                  <p className="text-sm text-slate-300" style={{ color: entry.color }}>
+                                    <span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: entry.color }}></span>
+                                    {entry.name}: <span className="text-white font-bold">{entry.value}</span>
+                                  </p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
                     cursor={{ fill: '#334155', opacity: 0.4 }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '20px' }} />
                   <Bar dataKey="Cabinets" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Cabinets" />
-                  <Bar dataKey="Folders" fill="#10b981" radius={[4, 4, 0, 0]} name="Folders" />
+                  <Bar dataKey="Folders" fill="#10b981" radius={[4, 4, 0, 0]} name="Files" /> {/* Folders was Files color in summary, swapping to match */}
                   <Bar dataKey="Files" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Files" />
+                  <Bar dataKey="Boxes" fill="#6366f1" radius={[4, 4, 0, 0]} name="Boxes" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

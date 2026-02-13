@@ -146,6 +146,17 @@ const Cabinets: React.FC = () => {
     const handleBulkDelete = async () => {
         if (selectedIds.length === 0) return;
 
+        // Validation: Check if any selected cabinet has contents
+        const cabinetsWithContents = selectedIds.filter(id => {
+            const stats = getCabinetStats(id);
+            return stats.folders > 0 || stats.files > 0;
+        });
+
+        if (cabinetsWithContents.length > 0) {
+            toast.error(`Cannot delete ${cabinetsWithContents.length} cabinets because they contain items. Please empty them first.`);
+            return;
+        }
+
         try {
             await Promise.all(selectedIds.map(id => deleteShelf(id)));
             toast.success(`${selectedIds.length} cabinets deleted successfully`);

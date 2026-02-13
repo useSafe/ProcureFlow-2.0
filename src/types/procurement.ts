@@ -27,6 +27,7 @@ export interface Folder {
     code: string; // e.g., "F1", "F2"
     description?: string;
     color?: string; // Hex color code
+    stackNumber?: number; // For ordering
     createdAt: string;
 }
 
@@ -84,10 +85,10 @@ export interface Procurement {
     dateAdded: string; // Date the record was added to system
 
     // Location tracking (Cabinet > Shelf > Folder OR Box)
-    cabinetId?: string;
-    shelfId?: string;
-    folderId?: string;
-    boxId?: string;
+    cabinetId?: string | null;
+    shelfId?: string | null;
+    folderId?: string | null;
+    boxId?: string | null;
 
     // Status
     status: ProcurementStatus;
