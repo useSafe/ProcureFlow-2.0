@@ -1057,7 +1057,10 @@ const ProcurementList: React.FC = () => {
                                     <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
                                         <SelectItem value="all_types">All Types</SelectItem>
                                         <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                        <SelectItem value="SVP">SVP</SelectItem>
+                                        <SelectItem value="SVP(Small Value Procurement)">SVP(Small Value Procurement)</SelectItem>
+                                        <SelectItem value="Attendance Sheets">Attendance Sheets</SelectItem>
+                                        <SelectItem value="Receipt">Receipt</SelectItem>
+                                        <SelectItem value="Others">Others</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
