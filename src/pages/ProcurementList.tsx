@@ -457,7 +457,8 @@ const ProcurementList: React.FC = () => {
     const filteredProcurements = (procurements || []).filter(procurement => {
         const matchesSearch =
             procurement.prNumber.toLowerCase().includes(filters.search.toLowerCase()) ||
-            procurement.description.toLowerCase().includes(filters.search.toLowerCase());
+            procurement.description.toLowerCase().includes(filters.search.toLowerCase()) ||
+            (procurement.projectName && procurement.projectName.toLowerCase().includes(filters.search.toLowerCase()));
 
         const matchesCabinet = !filters.cabinetId || filters.cabinetId === 'all_cabinets' || procurement.cabinetId === filters.cabinetId;
         const matchesShelf = !filters.shelfId || filters.shelfId === 'all_shelves' || procurement.shelfId === filters.shelfId;
@@ -908,7 +909,7 @@ const ProcurementList: React.FC = () => {
                             <div className="relative flex-1">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
                                 <Input
-                                    placeholder="Search PR Number or description..."
+                                    placeholder="Search PR Number, Project Name or description..."
                                     className="pl-9 bg-[#1e293b] border-slate-700 text-white placeholder:text-slate-500 h-8 text-xs"
                                     value={filters.search}
                                     onChange={(e) => setFilters({ ...filters, search: e.target.value })}
@@ -1274,40 +1275,32 @@ const ProcurementList: React.FC = () => {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {procurement.procurementType === 'Attendance Sheets' ? (
-                                                    <span className="text-slate-500">N/A</span>
-                                                ) : (
-                                                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${procurement.progressStatus === 'Success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                        procurement.progressStatus === 'Failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                            procurement.progressStatus === 'Cancelled' ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' :
-                                                                'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-                                                        }`}>
-                                                        {procurement.progressStatus || 'Pending'}
-                                                    </div>
-                                                )}
+                                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${procurement.progressStatus === 'Success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                                    procurement.progressStatus === 'Failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                        procurement.progressStatus === 'Cancelled' ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' :
+                                                            'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                                                    }`}>
+                                                    {procurement.progressStatus || 'Pending'}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
-                                                {procurement.procurementType === 'Attendance Sheets' ? (
-                                                    <span className="text-slate-500">N/A</span>
-                                                ) : (
-                                                    <Select
-                                                        value={procurement.status}
-                                                        onValueChange={(value) => handleStatusChange(procurement, value as ProcurementStatus)}
-                                                    >
-                                                        <SelectTrigger className={`w-[130px] border ${procurement.status === 'active'
-                                                            ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                                                            : 'bg-slate-700/50 text-slate-300 border-slate-700'
-                                                            }`}>
-                                                            <SelectValue>
-                                                                {procurement.status === 'active' ? 'Borrowed' : 'Archived'}
-                                                            </SelectValue>
-                                                        </SelectTrigger>
-                                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                            <SelectItem value="active" className="text-orange-400 focus:text-orange-400">Borrowed</SelectItem>
-                                                            <SelectItem value="archived" className="text-slate-300 focus:text-white">Archived</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
+                                                <Select
+                                                    value={procurement.status}
+                                                    onValueChange={(value) => handleStatusChange(procurement, value as ProcurementStatus)}
+                                                >
+                                                    <SelectTrigger className={`w-[130px] border ${procurement.status === 'active'
+                                                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                                        : 'bg-slate-700/50 text-slate-300 border-slate-700'
+                                                        }`}>
+                                                        <SelectValue>
+                                                            {procurement.status === 'active' ? 'Borrowed' : 'Archived'}
+                                                        </SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                        <SelectItem value="active" className="text-orange-400 focus:text-orange-400">Borrowed</SelectItem>
+                                                        <SelectItem value="archived" className="text-slate-300 focus:text-white">Archived</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </TableCell>
                                             <TableCell className="text-slate-400">
                                                 {procurement.procurementDate ? format(new Date(procurement.procurementDate), 'MMM d, yyyy') : '-'}
@@ -1417,56 +1410,60 @@ const ProcurementList: React.FC = () => {
                             <div className="grid gap-6">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2 col-span-2">
-                                        <Label className="text-slate-300">PR Number Construction</Label>
-                                        <div className="grid grid-cols-4 gap-2 items-end p-3 rounded-lg bg-[#1e293b]/50 border border-slate-700/50">
-                                            <div className="space-y-1">
-                                                <Label className="text-xs text-slate-400">Division</Label>
-                                                <Select value={editDivisionId} onValueChange={setEditDivisionId}>
-                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs">
-                                                        <SelectValue placeholder="Div" />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                        {divisions.map(div => (
-                                                            <SelectItem key={div.id} value={div.id}>{div.abbreviation}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-xs text-slate-400">Month</Label>
-                                                <Select value={editPrMonth} onValueChange={setEditPrMonth}>
-                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
-                                                        {MONTHS.map(m => (
-                                                            <SelectItem key={m.value} value={m.value}>{m.value}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-xs text-slate-400">Year</Label>
-                                                <Input
-                                                    value={editPrYear}
-                                                    onChange={(e) => setEditPrYear(e.target.value)}
-                                                    className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
-                                                    maxLength={2}
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-xs text-slate-400">Seq</Label>
-                                                <Input
-                                                    value={editPrSequence}
-                                                    onChange={(e) => setEditPrSequence(e.target.value)}
-                                                    className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
-                                                    maxLength={3}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="mt-1 text-xs text-slate-500 text-right">
-                                            Current: <span className="font-mono text-emerald-500">{editingProcurement.prNumber}</span>
-                                        </div>
+                                        {!['Attendance Sheets', 'Receipt', 'Others'].includes(editingProcurement.procurementType || '') && (
+                                            <>
+                                                <Label className="text-slate-300">PR Number Construction</Label>
+                                                <div className="grid grid-cols-4 gap-2 items-end p-3 rounded-lg bg-[#1e293b]/50 border border-slate-700/50">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-xs text-slate-400">Division</Label>
+                                                        <Select value={editDivisionId} onValueChange={setEditDivisionId}>
+                                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs">
+                                                                <SelectValue placeholder="Div" />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                                {divisions.map(div => (
+                                                                    <SelectItem key={div.id} value={div.id}>{div.abbreviation}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-xs text-slate-400">Month</Label>
+                                                        <Select value={editPrMonth} onValueChange={setEditPrMonth}>
+                                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
+                                                                {MONTHS.map(m => (
+                                                                    <SelectItem key={m.value} value={m.value}>{m.value}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-xs text-slate-400">Year</Label>
+                                                        <Input
+                                                            value={editPrYear}
+                                                            onChange={(e) => setEditPrYear(e.target.value)}
+                                                            className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
+                                                            maxLength={2}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-xs text-slate-400">Seq</Label>
+                                                        <Input
+                                                            value={editPrSequence}
+                                                            onChange={(e) => setEditPrSequence(e.target.value)}
+                                                            className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
+                                                            maxLength={3}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="mt-1 text-xs text-slate-500 text-right">
+                                                    Current: <span className="font-mono text-emerald-500">{editingProcurement.prNumber}</span>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-slate-300">Project Name</Label>
@@ -1517,29 +1514,31 @@ const ProcurementList: React.FC = () => {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Procurement Type</Label>
-                                        <Select
-                                            value={editingProcurement.procurementType || 'Regular Bidding'}
-                                            onValueChange={(value) => setEditingProcurement({ ...editingProcurement, procurementType: value })}
-                                        >
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                                <SelectItem value="Small Value Procurement">Small Value Procurement (SVP)</SelectItem>
-                                                <SelectItem value="Shopping">Shopping</SelectItem>
-                                                <SelectItem value="Direct Contracting">Direct Contracting</SelectItem>
-                                                <SelectItem value="Negotiated Procurement">Negotiated Procurement</SelectItem>
-                                                <SelectItem value="Attendance Sheet">Attendance Sheet</SelectItem>
-                                                <SelectItem value="Official Receipt">Official Receipt</SelectItem>
-                                                <SelectItem value="Others">Others</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                    {!['Attendance Sheets', 'Receipt', 'Others'].includes(editingProcurement.procurementType || '') && (
+                                        <div className="space-y-2">
+                                            <Label className="text-slate-300">Procurement Type</Label>
+                                            <Select
+                                                value={editingProcurement.procurementType || 'Regular Bidding'}
+                                                onValueChange={(value) => setEditingProcurement({ ...editingProcurement, procurementType: value })}
+                                            >
+                                                <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                    <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
+                                                    <SelectItem value="Small Value Procurement">Small Value Procurement (SVP)</SelectItem>
+                                                    <SelectItem value="Shopping">Shopping</SelectItem>
+                                                    <SelectItem value="Direct Contracting">Direct Contracting</SelectItem>
+                                                    <SelectItem value="Negotiated Procurement">Negotiated Procurement</SelectItem>
+                                                    <SelectItem value="Attendance Sheet">Attendance Sheet</SelectItem>
+                                                    <SelectItem value="Official Receipt">Official Receipt</SelectItem>
+                                                    <SelectItem value="Others">Others</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
 
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 mb-5">
                                         <Label className="text-slate-300">Progress Status</Label>
                                         <Select
                                             value={editingProcurement.progressStatus || 'Pending'}
@@ -1560,121 +1559,123 @@ const ProcurementList: React.FC = () => {
                             </div>
 
                             {/* Checklist (Always shown for reference, or user can ignore) */}
-                            < div className="bg-[#0f172a] p-4 rounded-lg border border-slate-800 space-y-4" >
-                                <div className="flex justify-between items-center mb-1">
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-white">Attached Documents</h3>
-                                        <p className="text-xs text-slate-400">Combined Checklist</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {/* Replace the Check All button */}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-[10px] h-6 px-2 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
-                                            onClick={() => {
-                                                // Create a new checklist object with all items checked
-                                                const allChecked = {
-                                                    noticeToProceed: true,
-                                                    contractOfAgreement: true,
-                                                    noticeOfAward: true,
-                                                    bacResolutionAward: true,
-                                                    postQualReport: true,
-                                                    noticePostQual: true,
-                                                    bacResolutionPostQual: true,
-                                                    abstractBidsEvaluated: true,
-                                                    twgBidEvalReport: true,
-                                                    minutesBidOpening: true,
-                                                    resultEligibilityCheck: true,
-                                                    biddersTechFinancialProposals: true,
-                                                    minutesPreBid: true,
-                                                    biddingDocuments: true,
-                                                    inviteObservers: true,
-                                                    officialReceipt: true,
-                                                    boardResolution: true,
-                                                    philgepsAwardNotice: true,
-                                                    philgepsPosting: true,
-                                                    websitePosting: true,
-                                                    postingCertificate: true,
-                                                    fundsAvailability: true
-                                                };
-
-                                                setEditingProcurement(prev => ({
-                                                    ...prev!,
-                                                    checklist: allChecked
-                                                }));
-                                            }}
-                                        >
-                                            Check All
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-[10px] h-6 px-2 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
-                                            onClick={() => {
-                                                // Create a new checklist object with all items unchecked
-                                                const allUnchecked = {
-                                                    noticeToProceed: false,
-                                                    contractOfAgreement: false,
-                                                    noticeOfAward: false,
-                                                    bacResolutionAward: false,
-                                                    postQualReport: false,
-                                                    noticePostQual: false,
-                                                    bacResolutionPostQual: false,
-                                                    abstractBidsEvaluated: false,
-                                                    twgBidEvalReport: false,
-                                                    minutesBidOpening: false,
-                                                    resultEligibilityCheck: false,
-                                                    biddersTechFinancialProposals: false,
-                                                    minutesPreBid: false,
-                                                    biddingDocuments: false,
-                                                    inviteObservers: false,
-                                                    officialReceipt: false,
-                                                    boardResolution: false,
-                                                    philgepsAwardNotice: false,
-                                                    philgepsPosting: false,
-                                                    websitePosting: false,
-                                                    postingCertificate: false,
-                                                    fundsAvailability: false
-                                                };
-
-                                                setEditingProcurement(prev => ({
-                                                    ...prev!,
-                                                    checklist: allUnchecked
-                                                }));
-                                            }}
-                                        >
-                                            Clear All
-                                        </Button>
-                                    </div>
-                                </div>
-                                <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 text-xs max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                    {checklistItems.map((item) => (
-                                        <div key={item.key} className="flex items-center space-x-2 p-1 rounded hover:bg-slate-800/50">
-                                            <Checkbox
-                                                id={`edit-${item.key}`}
-                                                checked={editingProcurement.checklist?.[item.key as keyof typeof editingProcurement.checklist] || false}
-                                                onCheckedChange={(checked) => setEditingProcurement({
-                                                    ...editingProcurement,
-                                                    checklist: {
-                                                        ...editingProcurement.checklist,
-                                                        [item.key]: checked
-                                                    } as any
-                                                })}
-                                                className="h-3 w-3 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                            />
-                                            <Label
-                                                htmlFor={`edit-${item.key}`}
-                                                className="text-[10px] leading-none text-slate-300 cursor-pointer"
-                                            >
-                                                {item.label}
-                                            </Label>
+                            {editingProcurement && !['Attendance Sheets', 'Receipt', 'Others'].includes(editingProcurement.procurementType || '') && (
+                                <div className="bg-[#0f172a] p-4 rounded-lg border border-slate-800 space-y-4">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <div>
+                                            <h3 className="text-sm font-semibold text-white">Attached Documents</h3>
+                                            <p className="text-xs text-slate-400">Combined Checklist</p>
                                         </div>
-                                    ))}
-                                </div>
-                            </div >
+                                        <div className="flex gap-2">
+                                            {/* Replace the Check All button */}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-[10px] h-6 px-2 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                                                onClick={() => {
+                                                    // Create a new checklist object with all items checked
+                                                    const allChecked = {
+                                                        noticeToProceed: true,
+                                                        contractOfAgreement: true,
+                                                        noticeOfAward: true,
+                                                        bacResolutionAward: true,
+                                                        postQualReport: true,
+                                                        noticePostQual: true,
+                                                        bacResolutionPostQual: true,
+                                                        abstractBidsEvaluated: true,
+                                                        twgBidEvalReport: true,
+                                                        minutesBidOpening: true,
+                                                        resultEligibilityCheck: true,
+                                                        biddersTechFinancialProposals: true,
+                                                        minutesPreBid: true,
+                                                        biddingDocuments: true,
+                                                        inviteObservers: true,
+                                                        officialReceipt: true,
+                                                        boardResolution: true,
+                                                        philgepsAwardNotice: true,
+                                                        philgepsPosting: true,
+                                                        websitePosting: true,
+                                                        postingCertificate: true,
+                                                        fundsAvailability: true
+                                                    };
+
+                                                    setEditingProcurement(prev => ({
+                                                        ...prev!,
+                                                        checklist: allChecked
+                                                    }));
+                                                }}
+                                            >
+                                                Check All
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-[10px] h-6 px-2 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                                                onClick={() => {
+                                                    // Create a new checklist object with all items unchecked
+                                                    const allUnchecked = {
+                                                        noticeToProceed: false,
+                                                        contractOfAgreement: false,
+                                                        noticeOfAward: false,
+                                                        bacResolutionAward: false,
+                                                        postQualReport: false,
+                                                        noticePostQual: false,
+                                                        bacResolutionPostQual: false,
+                                                        abstractBidsEvaluated: false,
+                                                        twgBidEvalReport: false,
+                                                        minutesBidOpening: false,
+                                                        resultEligibilityCheck: false,
+                                                        biddersTechFinancialProposals: false,
+                                                        minutesPreBid: false,
+                                                        biddingDocuments: false,
+                                                        inviteObservers: false,
+                                                        officialReceipt: false,
+                                                        boardResolution: false,
+                                                        philgepsAwardNotice: false,
+                                                        philgepsPosting: false,
+                                                        websitePosting: false,
+                                                        postingCertificate: false,
+                                                        fundsAvailability: false
+                                                    };
+
+                                                    setEditingProcurement(prev => ({
+                                                        ...prev!,
+                                                        checklist: allUnchecked
+                                                    }));
+                                                }}
+                                            >
+                                                Clear All
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 text-xs max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {checklistItems.map((item) => (
+                                            <div key={item.key} className="flex items-center space-x-2 p-1 rounded hover:bg-slate-800/50">
+                                                <Checkbox
+                                                    id={`edit-${item.key}`}
+                                                    checked={editingProcurement.checklist?.[item.key as keyof typeof editingProcurement.checklist] || false}
+                                                    onCheckedChange={(checked) => setEditingProcurement({
+                                                        ...editingProcurement,
+                                                        checklist: {
+                                                            ...editingProcurement.checklist,
+                                                            [item.key]: checked
+                                                        } as any
+                                                    })}
+                                                    className="h-3 w-3 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                                />
+                                                <Label
+                                                    htmlFor={`edit-${item.key}`}
+                                                    className="text-[10px] leading-none text-slate-300 cursor-pointer"
+                                                >
+                                                    {item.label}
+                                                </Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div >
+                            )}
 
 
                             {

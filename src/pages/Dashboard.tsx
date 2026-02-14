@@ -299,7 +299,7 @@ const Dashboard: React.FC = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
               <Input
-                placeholder="Search by PR Number..."
+                placeholder="Search PR Number, Project Name or description..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -328,9 +328,11 @@ const Dashboard: React.FC = () => {
                     <button
                       key={proc.id}
                       onClick={() => {
-                        setSearchQuery(proc.prNumber);
+                        const isSpecial = ['Attendance Sheets', 'Receipt', 'Others'].includes(proc.procurementType || '');
+                        const searchValue = isSpecial ? proc.projectName : proc.prNumber;
+                        setSearchQuery(searchValue || proc.prNumber);
                         setShowSuggestions(false);
-                        navigate(`/procurement/list?search=${encodeURIComponent(proc.prNumber)}`);
+                        navigate(`/procurement/list?search=${encodeURIComponent(searchValue || proc.prNumber)}`);
                       }}
                       className="w-full px-4 py-3 text-left hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-b-0 flex items-start gap-3"
                     >
@@ -581,6 +583,8 @@ const Dashboard: React.FC = () => {
                         fontSize={12}
                         tickLine={false}
                         axisLine={false}
+                        allowDecimals={false}
+                        domain={[0, (dataMax: number) => dataMax + 5]}
                       />
                       <Tooltip
                         cursor={{ fill: '#1e293b' }}
@@ -617,7 +621,12 @@ const Dashboard: React.FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hierarchyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
-                  <YAxis stroke="#94a3b8" fontSize={12} />
+                  <YAxis
+                    stroke="#94a3b8"
+                    fontSize={12}
+                    allowDecimals={false}
+                    domain={[0, (dataMax: number) => dataMax + 2]}
+                  />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {

@@ -6,6 +6,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -177,105 +178,90 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                     </div>
                                 )}
 
-                                {/* Checklist Summary - Documents Handed Over */}
-                                {procurement.checklist && Object.keys(procurement.checklist).length > 0 && (
-                                    <div>
-                                        <h3 className="text-lg font-semibold border-b border-slate-800 pb-2 mb-3">Documents Handed Over</h3>
-
-                                        {/* Checklist Container - Full Height */}
-                                        <div className="pr-2">
-                                            <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
-                                                {/* LEFT COLUMN */}
-                                                <div className="space-y-3">
-                                                    {[
-                                                        { key: 'noticeToProceed', label: 'A. Notice to Proceed' },
-                                                        { key: 'contractOfAgreement', label: 'B. Contract of Agreement' },
-                                                        { key: 'noticeOfAward', label: 'C. Notice of Award' },
-                                                        { key: 'bacResolutionAward', label: 'D. BAC Resolution to Award' },
-                                                        { key: 'postQualReport', label: 'E. Post-Qual Report' },
-                                                        { key: 'noticePostQual', label: 'F. Notice of Post-qualification' },
-                                                        { key: 'bacResolutionPostQual', label: 'G. BAC Resolution to Post-qualify' },
-                                                        { key: 'abstractBidsEvaluated', label: 'H. Abstract of Bids as Evaluated' },
-                                                        { key: 'twgBidEvalReport', label: 'I. TWG Bid Evaluation Report' },
-                                                        { key: 'minutesBidOpening', label: 'J. Minutes of Bid Opening' },
-                                                        { key: 'resultEligibilityCheck', label: 'K. Eligibility Check Results' },
-                                                    ].map((item) => (
-                                                        <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
-                                                            <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                ? 'bg-blue-600 border-blue-600'
-                                                                : 'border-slate-600'
-                                                                }`}>
-                                                                {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
-                                                                    <span className="text-white text-[10px]">✓</span>
-                                                                )}
+                                {/* Checklist Summary (Hide for special types) */}
+                                {!['Attendance Sheets', 'Receipt', 'Others'].includes(procurement.procurementType || '') && (
+                                    <Card className="bg-[#1e293b] border-slate-700 mb-6">
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                                                <FileText className="h-4 w-4 text-emerald-400" />
+                                                Documents Handed Over
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ScrollArea className="h-[250px] pr-4">
+                                                <div className="flex flex-col md:flex-row gap-6">
+                                                    {/* LEFT COLUMN */}
+                                                    <div className="flex-1 space-y-2">
+                                                        {[
+                                                            { key: 'noticeToProceed', label: 'A. Notice to Proceed' },
+                                                            { key: 'contractOfAgreement', label: 'B. Contract of Agreement' },
+                                                            { key: 'noticeOfAward', label: 'C. Notice of Award' },
+                                                            { key: 'bacResolutionAward', label: 'D. BAC Resolution to Award' },
+                                                            { key: 'postQualReport', label: 'E. Post-Qual Report' },
+                                                            { key: 'noticePostQual', label: 'F. Notice of Post-qualification' },
+                                                            { key: 'bacResolutionPostQual', label: 'G. BAC Resolution to Post-qualify' },
+                                                            { key: 'abstractBidsEvaluated', label: 'H. Abstract of Bids as Evaluated' },
+                                                            { key: 'twgBidEvalReport', label: 'I. TWG Bid Evaluation Report' },
+                                                            { key: 'minutesBidOpening', label: 'J. Minutes of Bid Opening' },
+                                                            { key: 'resultEligibilityCheck', label: 'K. Eligibility Check Results' },
+                                                        ].map((item) => (
+                                                            <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
+                                                                <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
+                                                                    ? 'bg-blue-600 border-blue-600'
+                                                                    : 'border-slate-600'
+                                                                    }`}>
+                                                                    {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
+                                                                        <span className="text-white text-[10px]">✓</span>
+                                                                    )}
+                                                                </div>
+                                                                <span className={`text-xs leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
+                                                                    ? 'text-slate-200'
+                                                                    : 'text-slate-500'
+                                                                    }`}>
+                                                                    {item.label}
+                                                                </span>
                                                             </div>
-                                                            <span className={`leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                ? 'text-slate-200'
-                                                                : 'text-slate-500'
-                                                                }`}>
-                                                                {item.label}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                        ))}
+                                                    </div>
 
-                                                {/* RIGHT COLUMN */}
-                                                <div className="space-y-3">
-                                                    {[
-                                                        { key: 'biddersTechFinancialProposals', label: 'L. Bidders Technical and Financial Proposals' },
-                                                        { key: 'minutesPreBid', label: 'M. Minutes of Pre-Bid Conference' },
-                                                        { key: 'biddingDocuments', label: 'N. Bidding Documents' },
-                                                        { key: 'inviteObservers', label: 'O.1. Letter Invitation to Observers' },
-                                                        { key: 'officialReceipt', label: 'O.2. Official Receipt' },
-                                                        { key: 'boardResolution', label: 'O.3. Board Resolution' },
-                                                        { key: 'philgepsAwardNotice', label: 'O.4. PhilGEPS Award Notice Abstract' },
-                                                        { key: 'philgepsPosting', label: 'P.1. PhilGEPS Posting' },
-                                                        { key: 'websitePosting', label: 'P.2. Website Posting' },
-                                                        { key: 'postingCertificate', label: 'P.3. Posting Certificate' },
-                                                        { key: 'fundsAvailability', label: 'Q. CAF, PR, TOR & APP' },
-                                                    ].map((item) => (
-                                                        <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
-                                                            <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                ? 'bg-blue-600 border-blue-600'
-                                                                : 'border-slate-600'
-                                                                }`}>
-                                                                {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
-                                                                    <span className="text-white text-[10px]">✓</span>
-                                                                )}
+                                                    {/* RIGHT COLUMN */}
+                                                    <div className="flex-1 space-y-2">
+                                                        {[
+                                                            { key: 'biddersTechFinancialProposals', label: 'L. Bidders Technical and Financial Proposals' },
+                                                            { key: 'minutesPreBid', label: 'M. Minutes of Pre-Bid Conference' },
+                                                            { key: 'biddingDocuments', label: 'N. Bidding Documents' },
+                                                            { key: 'inviteObservers', label: 'O.1. Letter Invitation to Observers' },
+                                                            { key: 'officialReceipt', label: 'O.2. Official Receipt' },
+                                                            { key: 'boardResolution', label: 'O.3. Board Resolution' },
+                                                            { key: 'philgepsAwardNotice', label: 'O.4. PhilGEPS Award Notice Abstract' },
+                                                            { key: 'philgepsPosting', label: 'P.1. PhilGEPS Posting' },
+                                                            { key: 'websitePosting', label: 'P.2. Website Posting' },
+                                                            { key: 'postingCertificate', label: 'P.3. Posting Certificate' },
+                                                            { key: 'fundsAvailability', label: 'Q. CAF, PR, TOR & APP' },
+                                                        ].map((item) => (
+                                                            <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
+                                                                <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
+                                                                    ? 'bg-blue-600 border-blue-600'
+                                                                    : 'border-slate-600'
+                                                                    }`}>
+                                                                    {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
+                                                                        <span className="text-white text-[10px]">✓</span>
+                                                                    )}
+                                                                </div>
+                                                                <span className={`text-xs leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
+                                                                    ? 'text-slate-200'
+                                                                    : 'text-slate-500'
+                                                                    }`}>
+                                                                    {item.label}
+                                                                </span>
                                                             </div>
-                                                            <span className={`leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                ? 'text-slate-200'
-                                                                : 'text-slate-500'
-                                                                }`}>
-                                                                {item.label}
-                                                            </span>
-                                                        </div>
-                                                    ))}
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Add this CSS to your global styles or component */}
-                                        <style jsx>{`
-                                        .custom-scrollbar::-webkit-scrollbar {
-                                            width: 8px;
-                                        }
-                                        .custom-scrollbar::-webkit-scrollbar-track {
-                                            background: rgb(15 23 42 / 0.5);
-                                            border-radius: 4px;
-                                        }
-                                        .custom-scrollbar::-webkit-scrollbar-thumb {
-                                            background: rgb(71 85 105);
-                                            border-radius: 4px;
-                                        }
-                                        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                                            background: rgb(100 116 139);
-                                        }
-                                    `}</style>
-                                    </div>
+                                            </ScrollArea>
+                                        </CardContent>
+                                    </Card>
                                 )}
-
-                                {/* Metadata Footer */}
                                 <div className="pt-4 border-t border-slate-800 grid grid-cols-2 md:grid-cols-3 gap-4 text-xs text-slate-500">
                                     <div>
                                         <span className="block font-semibold mb-1">Created By</span>
@@ -301,9 +287,9 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                             Close
                         </Button>
                     </div>
-                </div>
-            </DialogContent>
-        </Dialog>
+                </div >
+            </DialogContent >
+        </Dialog >
     );
 };
 

@@ -235,7 +235,7 @@ const AddProcurement: React.FC = () => {
                 boxId: storageMode === 'box' ? boxId : undefined,
 
                 status, // User can now select status for all types
-                progressStatus: isSpecialType ? 'Pending' : progressStatus, // Default to Pending if hidden
+                progressStatus, // Save the actual selected status for ALL types
                 urgencyLevel: 'medium',
                 dateAdded: dateAdded ? dateAdded.toISOString() : new Date().toISOString(),
                 procurementDate: (procDateMonth && procDateDay && procDateYear)
@@ -641,22 +641,20 @@ const AddProcurement: React.FC = () => {
                                     </Select>
                                 </div>
 
-                                {!isSpecialType && (
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Progress Status</Label>
-                                        <Select value={progressStatus} onValueChange={(val) => setProgressStatus(val as ProgressStatus)}>
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectItem value="Pending" className="text-yellow-400">Pending</SelectItem>
-                                                <SelectItem value="Success" className="text-emerald-400">Success</SelectItem>
-                                                <SelectItem value="Failed" className="text-red-400">Failed</SelectItem>
-                                                <SelectItem value="Cancelled" className="text-slate-400">Cancelled</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
+                                <div className="space-y-2">
+                                    <Label className="text-slate-300">Progress Status</Label>
+                                    <Select value={progressStatus} onValueChange={(val) => setProgressStatus(val as ProgressStatus)}>
+                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                            <SelectItem value="Pending" className="text-yellow-400">Pending</SelectItem>
+                                            <SelectItem value="Success" className="text-emerald-400">Success</SelectItem>
+                                            <SelectItem value="Failed" className="text-red-400">Failed</SelectItem>
+                                            <SelectItem value="Cancelled" className="text-slate-400">Cancelled</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
