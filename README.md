@@ -57,21 +57,6 @@ The **Security Gate**.
 
 ---
 
-## 📚 Glossary of Terms
-
-| Term | Definition |
-| :--- | :--- |
-| **PR Number** | **Purchase Request Number**. The unique ID for a procurement project (e.g., `2024-01-001`). |
-| **BAC** | **Bids and Awards Committee**. The group responsible for the procurement process. |
-| **RBAC** | **Role-Based Access Control**. The security system that restricts what users can do based on their role (Admin vs. User). |
-| **SVP** | **Small Value Procurement**. A simplified procurement method for smaller purchases. |
-| **Digital Twin** | A virtual replica of a physical object or system. In this case, the app is a "twin" of the physical file storage. |
-| **Notice to Proceed (NTP)** | A document notifying the winning bidder to start work. |
-| **Notice of Award (NOA)** | A document declaring the winning bidder. |
-| **PhilGEPS** | Philippine Government Electronic Procurement System. |
-
----
-
 ## 🚀 How It Works: A Simple Flow
 
 1.  **Receive Request**: A new Purchase Request (PR) comes in.
