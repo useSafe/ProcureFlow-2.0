@@ -131,7 +131,7 @@ const Dashboard: React.FC = () => {
     return procurements
       .filter(p =>
         p.prNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase())
+        (p.projectName && p.projectName.toLowerCase().includes(searchQuery.toLowerCase()))
       )
       .slice(0, 5);
   }, [searchQuery, procurements]);
@@ -299,7 +299,7 @@ const Dashboard: React.FC = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
               <Input
-                placeholder="Search PR Number, Project Name or description..."
+                placeholder="Search PR Number or Project Name..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -342,7 +342,7 @@ const Dashboard: React.FC = () => {
                           {proc.prNumber}
                         </div>
                         <div className="text-xs text-slate-400 truncate mt-0.5">
-                          {proc.description}
+                          {proc.projectName}
                         </div>
                       </div>
                     </button>

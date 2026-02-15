@@ -23,6 +23,16 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -62,6 +72,8 @@ const UserManagement: React.FC = () => {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -257,21 +269,25 @@ const UserManagement: React.FC = () => {
         }
     };
 
-    const handleDeleteUser = async (id: string) => {
-        const userToDelete = users.find(u => u.id === id);
-        // Admin Protection
-        if (userToDelete?.email === 'admin@gmail.com') {
+    const handleDeleteClick = (user: User) => {
+        if (user.email === 'admin@gmail.com') {
             toast.error("Cannot delete the main Admin user.");
             return;
         }
+        setUserToDelete(user);
+        setIsDeleteOpen(true);
+    };
 
-        if (confirm("Are you sure you want to delete this user? This cannot be undone.")) {
-            try {
-                await deleteUser(id);
-                toast.success('User deleted');
-            } catch (error) {
-                toast.error('Failed to delete user');
-            }
+    const confirmDelete = async () => {
+        if (!userToDelete) return;
+
+        try {
+            await deleteUser(userToDelete.id);
+            toast.success('User deleted');
+            setIsDeleteOpen(false);
+            setUserToDelete(null);
+        } catch (error) {
+            toast.error('Failed to delete user');
         }
     };
 
@@ -410,7 +426,7 @@ const UserManagement: React.FC = () => {
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
                                                 {user.email !== 'admin@gmail.com' && (
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user.id)} className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(user)} className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 )}
@@ -637,6 +653,28 @@ const UserManagement: React.FC = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                <AlertDialogContent className="bg-[#1e293b] border-slate-700 text-white">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400">
+                            This action cannot be undone. This will permanently delete the user account
+                            <span className="font-semibold text-white"> {userToDelete?.name} </span>
+                            and remove their access to the system.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-transparent border-slate-700 text-white hover:bg-slate-800 hover:text-white">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDelete}
+                            className="bg-red-600 hover:bg-red-700 text-white border-none"
+                        >
+                            Delete User
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Edit User Modal */}
             <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setShowEditPassword(false); setEmailError(''); setPasswordError(''); setPasswordStrength(0); } }}>

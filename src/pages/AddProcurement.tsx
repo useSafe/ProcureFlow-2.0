@@ -253,7 +253,7 @@ const AddProcurement: React.FC = () => {
             );
 
             toast.success('File record added successfully');
-            navigate('/dashboard');
+            navigate('/procurement/list');
         } catch (error: any) {
             toast.error(error.message || 'Failed to add file record');
         } finally {

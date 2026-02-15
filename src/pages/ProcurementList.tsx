@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,6 +76,7 @@ import ProcurementDetailsDialog from '@/components/procurement/ProcurementDetail
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -122,10 +123,12 @@ const checklistItems = [
 
 const ProcurementList: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const folderIdFromUrl = searchParams.get('folderId');
 
     const [procurements, setProcurements] = useState<Procurement[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Location Data - Note: cabinets table stores Shelves (Tier 1), shelves table stores Cabinets (Tier 2)
     const [cabinets, setCabinets] = useState<Cabinet[]>([]); // These are actually Shelves (Tier 1)
@@ -135,6 +138,7 @@ const ProcurementList: React.FC = () => {
 
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [jumpPage, setJumpPage] = useState('');
     const [editingProcurement, setEditingProcurement] = useState<Procurement | null>(null);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
@@ -169,8 +173,24 @@ const ProcurementList: React.FC = () => {
     // Phase 6 Filters
     const [divisions, setDivisions] = useState<Division[]>([]);
     const [filterDivision, setFilterDivision] = useState<string>('all_divisions');
-    const [filterType, setFilterType] = useState<string>('all_types'); // Type filter (Regular Bidding / SVP)
+    const [typeFilters, setTypeFilters] = useState<string[]>([]); // Multi-select Type filter
     const [filterDateRange, setFilterDateRange] = useState<{ from: Date | undefined; to: Date | undefined } | undefined>(undefined);
+
+    // Export Modal State
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportFilters, setExportFilters] = useState<{
+        type: string[];
+        status: string[];
+        progress: string[];
+        division: string;
+        dateRange: { from: Date | undefined; to: Date | undefined } | undefined;
+    }>({
+        type: [],
+        status: [],
+        progress: [],
+        division: 'all_divisions',
+        dateRange: undefined
+    });
 
     // Divisions for PR Number construction
     // const [divisions, setDivisions] = useState<Division[]>([]); // This line is a duplicate, removed.
@@ -198,7 +218,7 @@ const ProcurementList: React.FC = () => {
 
     const isFolderView = !!filters.folderId && filters.folderId !== 'all_folders';
 
-    const itemsPerPage = 20;
+    const itemsPerPage = 15;
 
     // Stack number calculation helper
     const calculateStackNumbers = (procurements: Procurement[], folderId: string): Map<string, number> => {
@@ -343,7 +363,10 @@ const ProcurementList: React.FC = () => {
 
     useEffect(() => {
         // Subscribe to real-time updates
-        const unsubProcurements = onProcurementsChange(setProcurements);
+        const unsubProcurements = onProcurementsChange((data) => {
+            setProcurements(data);
+            setIsLoading(false);
+        });
         const unsubCabinets = onCabinetsChange(setCabinets);
         const unsubShelves = onShelvesChange(setShelves);
         const unsubFolders = onFoldersChange(setFolders);
@@ -439,6 +462,7 @@ const ProcurementList: React.FC = () => {
     // Filter options
     const statusOptions: ProcurementStatus[] = ['active', 'archived'];
     const progressStatusOptions = ['Pending', 'Success', 'Failed', 'Cancelled'];
+    const typeOptions = ['Regular Bidding', 'Small Value Procurement(SVP)', 'Attendance Sheets', 'Receipt', 'Others'];
 
     const toggleStatusFilter = (status: string) => {
         setStatusFilters(prev => {
@@ -453,6 +477,15 @@ const ProcurementList: React.FC = () => {
             return [...prev, status];
         });
     };
+
+    const toggleTypeFilter = (type: string) => {
+        setTypeFilters(prev => {
+            if (prev.includes(type)) return prev.filter(t => t !== type);
+            return [...prev, type];
+        });
+    };
+
+
 
     const filteredProcurements = (procurements || []).filter(procurement => {
         const matchesSearch =
@@ -474,8 +507,8 @@ const ProcurementList: React.FC = () => {
         // Division (stored as name in procurement.division)
         const matchesDivision = !filterDivision || filterDivision === 'all_divisions' || procurement.division === filterDivision;
 
-        // Type Filter (Regular Bidding / SVP)
-        const matchesType = !filterType || filterType === 'all_types' || procurement.procurementType === filterType;
+        // Type Filter (Multi-select)
+        const matchesType = typeFilters.length === 0 || typeFilters.includes(procurement.procurementType || '');
 
         // Date Range (Date Added)
         const matchesDate = !filterDateRange || !filterDateRange.from || (
@@ -514,6 +547,16 @@ const ProcurementList: React.FC = () => {
         currentPage * itemsPerPage
     );
 
+    const handleJumpToPage = () => {
+        const page = parseInt(jumpPage);
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+            setJumpPage('');
+        } else {
+            toast.error(`Please enter a valid page number between 1 and ${totalPages}`);
+        }
+    };
+
 
 
     const clearFilters = () => {
@@ -530,8 +573,10 @@ const ProcurementList: React.FC = () => {
         // clear multi-select status
         setStatusFilters([]);
         setProgressStatusFilters([]);
+        setStatusFilters([]);
+        setProgressStatusFilters([]);
         setFilterDivision('all_divisions');
-        setFilterType('all_types');
+        setTypeFilters([]);
         setFilterDateRange(undefined);
         // reset sorting
         setSortField('date');
@@ -689,18 +734,51 @@ const ProcurementList: React.FC = () => {
         }
     };
 
-    const handleExportCSV = () => {
-        // Use ALL procurements, not just filtered ones
-        const exportData = procurements.map(p => {
+    const handleExportClick = () => {
+        // Initialize export filters with current view filters
+        setExportFilters({
+            type: [...typeFilters],
+            status: [...statusFilters],
+            progress: [...progressStatusFilters],
+            division: filterDivision,
+            dateRange: filterDateRange
+        });
+        setIsExportModalOpen(true);
+    };
+
+    const handleExportConfirm = () => {
+        // Filter procurements based on Export Modal state
+        const exportData = (procurements || []).filter(procurement => {
+            // Type Filter
+            const matchesType = exportFilters.type.length === 0 || exportFilters.type.includes(procurement.procurementType || '');
+
+            // Status Filter
+            const matchesStatus = exportFilters.status.length === 0 || exportFilters.status.includes(procurement.status);
+
+            // Progress Filter
+            const matchesProgress = exportFilters.progress.length === 0 || exportFilters.progress.includes(procurement.progressStatus || 'Pending');
+
+            // Division Filter
+            const matchesDivision = !exportFilters.division || exportFilters.division === 'all_divisions' || procurement.division === exportFilters.division;
+
+            // Date Range Filter
+            const matchesDate = !exportFilters.dateRange || !exportFilters.dateRange.from || (
+                new Date(procurement.dateAdded) >= exportFilters.dateRange.from &&
+                (!exportFilters.dateRange.to || new Date(procurement.dateAdded) <= new Date(exportFilters.dateRange.to.setHours(23, 59, 59, 999)))
+            );
+
+            return matchesType && matchesStatus && matchesProgress && matchesDivision && matchesDate;
+        }).map(p => {
             const checklist = p.checklist || {};
 
             return {
                 'PR Number': p.prNumber,
+                'Procurement Type': p.procurementType || '',
                 'Project Name': p.projectName || '',
                 'Description': p.description,
                 'Division': p.division || '',
                 'Location': getLocationString(p),
-                'Status': p.status,
+                'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
                 'Progress Status': p.progressStatus || 'Pending',
                 'Stack Number': p.stackNumber || '',
                 'Borrowed By': p.borrowedBy || '',
@@ -709,6 +787,9 @@ const ProcurementList: React.FC = () => {
                 'Return By': p.returnedBy || '',
                 'Return Date': p.returnDate ? format(new Date(p.returnDate), 'MMM d, yyyy') : '',
                 'Procurement Date': p.procurementDate ? format(new Date(p.procurementDate), 'MMM d, yyyy') : '',
+                'Tags': (p.tags || []).join(', '),
+                'Created By': p.createdByName || '',
+                'Created At': p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '',
 
                 // Documents Handed Over (Checklist A-Q)
                 'A': checklist.noticeToProceed ? 'Yes' : '',
@@ -745,7 +826,9 @@ const ProcurementList: React.FC = () => {
         link.href = URL.createObjectURL(blob);
         link.download = `procurement_records_${format(new Date(), 'yyyy-MM-dd')}.csv`;
         link.click();
-        toast.success('Exported to CSV successfully');
+
+        setIsExportModalOpen(false);
+        toast.success(`Exported ${exportData.length} records to CSV`);
     };
 
 
@@ -894,7 +977,11 @@ const ProcurementList: React.FC = () => {
                         </AlertDialog>
                     )}
 
-                    <Button onClick={handleExportCSV} className="bg-emerald-600 hover:bg-emerald-700">
+                    <Button onClick={() => navigate('/procurement/add')} className="bg-blue-600 hover:bg-blue-700">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add New Record
+                    </Button>
+                    <Button onClick={handleExportClick} className="bg-emerald-600 hover:bg-emerald-700">
                         <FileText className="mr-2 h-4 w-4" />
                         Export as CSV
                     </Button>
@@ -1117,24 +1204,44 @@ const ProcurementList: React.FC = () => {
                                 </Select>
                             </div>
 
-                            {/* Type Filter */}
+                            {/* Type Filter (Multi-select) */}
                             <div className="flex-1 min-w-[120px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
-                                <Select
-                                    value={filterType}
-                                    onValueChange={setFilterType}
-                                >
-                                    <SelectTrigger className="w-full border-none bg-transparent text-white focus:ring-0 h-6 text-xs">
-                                        <SelectValue placeholder="All Types" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                        <SelectItem value="all_types">All Types</SelectItem>
-                                        <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                        <SelectItem value="Small Value Procurement(SVP)">Small Value Procurement(SVP)</SelectItem>
-                                        <SelectItem value="Attendance Sheets">Attendance Sheets</SelectItem>
-                                        <SelectItem value="Receipt">Receipt</SelectItem>
-                                        <SelectItem value="Others">Others</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" className="w-full flex justify-between items-center text-white px-3 py-1 h-6 text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span>Type</span>
+                                                {typeFilters.length > 0 && (
+                                                    <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-purple-600 text-white text-[10px] font-medium">
+                                                        {typeFilters.length}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <ChevronDown className="h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="bg-[#1e293b] border-slate-700 text-white p-3 w-56">
+                                        <div className="mb-2 text-slate-300 text-sm">Select type</div>
+                                        <div className="flex flex-col gap-2 max-h-48 overflow-auto">
+                                            {typeOptions.map((type) => (
+                                                <div key={type} className="flex items-center gap-2">
+                                                    <Checkbox
+                                                        checked={typeFilters.includes(type)}
+                                                        onCheckedChange={() => toggleTypeFilter(type)}
+                                                        className="border-slate-500 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleTypeFilter(type)}
+                                                        className="text-sm text-slate-200 text-left w-full"
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
 
                             {/* SORT controls */}
@@ -1307,7 +1414,7 @@ const ProcurementList: React.FC = () => {
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    {isFolderView && (
+                                                    {/* {isFolderView && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -1317,7 +1424,7 @@ const ProcurementList: React.FC = () => {
                                                         >
                                                             <ArrowUp className="h-4 w-4" />
                                                         </Button>
-                                                    )}
+                                                    )} */}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -1370,27 +1477,59 @@ const ProcurementList: React.FC = () => {
                     </div>
                 </CardContent>
                 {totalPages > 1 && (
-                    <div className="p-4 border-t border-slate-800 flex justify-end gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="bg-[#1e293b] border-slate-700 text-white disabled:opacity-50"
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-2" />
-                            Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages}
-                            className="bg-[#1e293b] border-slate-700 text-white disabled:opacity-50"
-                        >
-                            Next
-                            <ChevronRight className="h-4 w-4 ml-2" />
-                        </Button>
+                    <div className="p-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="text-sm text-slate-400">
+                            Showing {paginatedProcurements.length} of {filteredProcurements.length} records
+                            <span className="mx-2">•</span>
+                            Page {currentPage} of {totalPages}
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-400">Go to:</span>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    max={totalPages}
+                                    value={jumpPage}
+                                    onChange={(e) => setJumpPage(e.target.value)}
+                                    placeholder="#"
+                                    className="w-16 h-8 bg-[#0f172a] border-slate-700 text-white text-xs"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleJumpToPage()}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleJumpToPage}
+                                    className="h-8 px-2 bg-[#1e293b] border-slate-700 text-white hover:bg-slate-800"
+                                >
+                                    Go
+                                </Button>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="bg-[#1e293b] border-slate-700 text-white disabled:opacity-50"
+                                >
+                                    <ChevronLeft className="h-4 w-4 mr-2" />
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="bg-[#1e293b] border-slate-700 text-white disabled:opacity-50"
+                                >
+                                    Next
+                                    <ChevronRight className="h-4 w-4 ml-2" />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </Card>
@@ -1410,7 +1549,7 @@ const ProcurementList: React.FC = () => {
                             <div className="grid gap-6">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2 col-span-2">
-                                        {!['Attendance Sheets', 'Receipt', 'Others'].includes(editingProcurement.procurementType || '') && (
+                                        {!['Attendance Sheets', 'Others'].includes(editingProcurement.procurementType || '') && (
                                             <>
                                                 <Label className="text-slate-300">PR Number Construction</Label>
                                                 <div className="grid grid-cols-4 gap-2 items-end p-3 rounded-lg bg-[#1e293b]/50 border border-slate-700/50">
@@ -1514,7 +1653,8 @@ const ProcurementList: React.FC = () => {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    {!['Attendance Sheets', 'Receipt', 'Others'].includes(editingProcurement.procurementType || '') && (
+                                    {/* Procurement Type Dropdown - Restricted or Full based on type */}
+                                    {!['Attendance Sheets', 'Others'].includes(editingProcurement.procurementType || '') && (
                                         <div className="space-y-2">
                                             <Label className="text-slate-300">Procurement Type</Label>
                                             <Select
@@ -1525,14 +1665,24 @@ const ProcurementList: React.FC = () => {
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                    <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                                    <SelectItem value="Small Value Procurement">Small Value Procurement (SVP)</SelectItem>
-                                                    <SelectItem value="Shopping">Shopping</SelectItem>
-                                                    <SelectItem value="Direct Contracting">Direct Contracting</SelectItem>
-                                                    <SelectItem value="Negotiated Procurement">Negotiated Procurement</SelectItem>
-                                                    <SelectItem value="Attendance Sheet">Attendance Sheet</SelectItem>
-                                                    <SelectItem value="Official Receipt">Official Receipt</SelectItem>
-                                                    <SelectItem value="Others">Others</SelectItem>
+                                                    {['Regular Bidding', 'Small Value Procurement(SVP)', 'Receipt', 'Official Receipt'].includes(editingProcurement.procurementType || 'Regular Bidding') ? (
+                                                        <>
+                                                            <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
+                                                            <SelectItem value="Small Value Procurement(SVP)">Small Value Procurement (SVP)</SelectItem>
+                                                            <SelectItem value="Receipt">Receipt</SelectItem>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
+                                                            <SelectItem value="Small Value Procurement(SVP)">Small Value Procurement (SVP)</SelectItem>
+                                                            <SelectItem value="Shopping">Shopping</SelectItem>
+                                                            <SelectItem value="Direct Contracting">Direct Contracting</SelectItem>
+                                                            <SelectItem value="Negotiated Procurement">Negotiated Procurement</SelectItem>
+                                                            <SelectItem value="Attendance Sheets">Attendance Sheet</SelectItem>
+                                                            <SelectItem value="Receipt">Receipt</SelectItem>
+                                                            <SelectItem value="Others">Others</SelectItem>
+                                                        </>
+                                                    )}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -1559,7 +1709,7 @@ const ProcurementList: React.FC = () => {
                             </div>
 
                             {/* Checklist (Always shown for reference, or user can ignore) */}
-                            {editingProcurement && !['Attendance Sheets', 'Receipt', 'Others'].includes(editingProcurement.procurementType || '') && (
+                            {editingProcurement && !['Attendance Sheets', 'Others'].includes(editingProcurement.procurementType || '') && (
                                 <div className="bg-[#0f172a] p-4 rounded-lg border border-slate-800 space-y-4">
                                     <div className="flex justify-between items-center mb-1">
                                         <div>
@@ -2064,6 +2214,146 @@ const ProcurementList: React.FC = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog >
+
+            {/* Export Configuration Dialog */}
+            <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+                <DialogContent className="bg-[#1e293b] border-slate-800 text-white max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Export CSV Configuration</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Select filters to apply to the exported data.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        {/* Type Filter */}
+                        <div className="space-y-2">
+                            <Label className="text-slate-300">Procurement Type</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {typeOptions.map(type => (
+                                    <div key={type} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`export-type-${type}`}
+                                            checked={exportFilters.type.includes(type)}
+                                            onCheckedChange={(checked) => {
+                                                setExportFilters(prev => ({
+                                                    ...prev,
+                                                    type: checked
+                                                        ? [...prev.type, type]
+                                                        : prev.type.filter(t => t !== type)
+                                                }));
+                                            }}
+                                            className="border-slate-500 data-[state=checked]:bg-purple-600"
+                                        />
+                                        <Label htmlFor={`export-type-${type}`} className="text-xs text-slate-300">{type}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Status Filter */}
+                        <div className="space-y-2">
+                            <Label className="text-slate-300">Status</Label>
+                            <div className="flex gap-4">
+                                {statusOptions.map(status => (
+                                    <div key={status} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`export-status-${status}`}
+                                            checked={exportFilters.status.includes(status)}
+                                            onCheckedChange={(checked) => {
+                                                setExportFilters(prev => ({
+                                                    ...prev,
+                                                    status: checked
+                                                        ? [...prev.status, status]
+                                                        : prev.status.filter(s => s !== status)
+                                                }));
+                                            }}
+                                            className="border-slate-500 data-[state=checked]:bg-emerald-600"
+                                        />
+                                        <Label htmlFor={`export-status-${status}`} className="text-xs text-slate-300">{getStatusLabel(status)}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Progress Filter */}
+                        <div className="space-y-2">
+                            <Label className="text-slate-300">Progress</Label>
+                            <div className="flex flex-wrap gap-2">
+                                {progressStatusOptions.map(status => (
+                                    <div key={status} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`export-progress-${status}`}
+                                            checked={exportFilters.progress.includes(status)}
+                                            onCheckedChange={(checked) => {
+                                                setExportFilters(prev => ({
+                                                    ...prev,
+                                                    progress: checked
+                                                        ? [...prev.progress, status]
+                                                        : prev.progress.filter(s => s !== status)
+                                                }));
+                                            }}
+                                            className="border-slate-500 data-[state=checked]:bg-blue-600"
+                                        />
+                                        <Label htmlFor={`export-progress-${status}`} className="text-xs text-slate-300">{status}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Division Filter */}
+                        <div className="space-y-2">
+                            <Label className="text-slate-300">Division</Label>
+                            <Select
+                                value={exportFilters.division}
+                                onValueChange={(val) => setExportFilters(prev => ({ ...prev, division: val }))}
+                            >
+                                <SelectTrigger className="bg-[#0f172a] border-slate-700 text-white">
+                                    <SelectValue placeholder="All Divisions" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white h-[200px]">
+                                    <SelectItem value="all_divisions">All Divisions</SelectItem>
+                                    {divisions.map((d) => (
+                                        <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Date Filter */}
+                        <div className="space-y-2">
+                            <Label className="text-slate-300">Date Added Range</Label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="date"
+                                    className="bg-[#0f172a] border border-slate-700 rounded px-2 py-1 text-white text-xs w-full"
+                                    value={exportFilters.dateRange?.from ? format(exportFilters.dateRange.from, 'yyyy-MM-dd') : ''}
+                                    onChange={(e) => setExportFilters(prev => ({
+                                        ...prev,
+                                        dateRange: { ...prev.dateRange, from: e.target.value ? new Date(e.target.value) : undefined, to: prev.dateRange?.to }
+                                    }))}
+                                />
+                                <input
+                                    type="date"
+                                    className="bg-[#0f172a] border border-slate-700 rounded px-2 py-1 text-white text-xs w-full"
+                                    value={exportFilters.dateRange?.to ? format(exportFilters.dateRange.to, 'yyyy-MM-dd') : ''}
+                                    onChange={(e) => setExportFilters(prev => ({
+                                        ...prev,
+                                        dateRange: { ...prev.dateRange, from: prev.dateRange?.from, to: e.target.value ? new Date(e.target.value) : undefined }
+                                    }))}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsExportModalOpen(false)} className="border-slate-700 text-white hover:bg-slate-800">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleExportConfirm} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                            Export CSV
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <ProcurementDetailsDialog
                 open={!!viewProcurement}
                 onOpenChange={(open) => !open && setViewProcurement(null)}

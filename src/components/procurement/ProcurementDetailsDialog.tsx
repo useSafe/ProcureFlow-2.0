@@ -179,7 +179,7 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                 )}
 
                                 {/* Checklist Summary (Hide for special types) */}
-                                {!['Attendance Sheets', 'Receipt', 'Others'].includes(procurement.procurementType || '') && (
+                                {!['Attendance Sheets', 'Others'].includes(procurement.procurementType || '') && (
                                     <Card className="bg-[#1e293b] border-slate-700 mb-6">
                                         <CardHeader className="pb-3">
                                             <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
