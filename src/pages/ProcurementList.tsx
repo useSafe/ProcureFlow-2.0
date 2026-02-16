@@ -201,19 +201,6 @@ const ProcurementList: React.FC = () => {
     const [editPrYear, setEditPrYear] = useState('');
     const [editPrSequence, setEditPrSequence] = useState('');
 
-    // Add state for box folders (in the component state section):
-    const [editAvailableBoxFolders, setEditAvailableBoxFolders] = useState<Folder[]>([]);
-
-    // Add useEffect to update box folders when box changes:
-    useEffect(() => {
-        if (editingProcurement && editingProcurement.boxId) {
-            setEditAvailableBoxFolders(folders.filter(f => f.boxId === editingProcurement.boxId));
-        } else {
-            setEditAvailableBoxFolders([]);
-        }
-    }, [editingProcurement?.boxId, folders]);
-
-
     useEffect(() => {
         const unsub = onDivisionsChange(setDivisions);
         return () => unsub();
@@ -734,21 +721,16 @@ const ProcurementList: React.FC = () => {
 
 
     // Updated to show: Shelf-Cabinet-Folder (S1-C1-F1)
-    
     const getLocationString = (p: Procurement) => {
+        const shelf = cabinets.find(c => c.id === p.cabinetId)?.code || '?'; // cabinetId points to Shelf (Tier 1)
+        const cabinet = shelves.find(s => s.id === p.shelfId)?.code || '?'; // shelfId points to Cabinet (Tier 2)
+        const folder = folders.find(f => f.id === p.folderId)?.code || '?'; // folderId points to Folder (Tier 3)
+        const box = boxes.find(b => b.id === p.boxId)?.code || '?'; // boxId points to Box
+
         if (p.boxId) {
-            const box = boxes.find(b => b.id === p.boxId)?.code || '?';
-            if (p.folderId) {
-                const folder = folders.find(f => f.id === p.folderId)?.code || '?';
-                return `${box}/${folder}`; // e.g., "BOX-01/F1"
-            }
-            return box; // e.g., "BOX-01"
+            return box; // Show only box code (e.g., "B1")
         } else {
-            // Traditional shelf path
-            const shelf = cabinets.find(c => c.id === p.cabinetId)?.code || '?';
-            const cabinet = shelves.find(s => s.id === p.shelfId)?.code || '?';
-            const folder = folders.find(f => f.id === p.folderId)?.code || '?';
-            return `${shelf}-${cabinet}-${folder}`; // e.g., "S1-C1-F1"
+            return `${shelf}-${cabinet}-${folder}`;
         }
     };
 
@@ -1871,187 +1853,119 @@ const ProcurementList: React.FC = () => {
                                 )
                             }
 
-                            
-                    <div className="space-y-2 border-t border-slate-800 pt-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <Label className="text-lg font-semibold text-white">Location</Label>
-                            <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
-                                <button
-                                    type="button"
-                                    onClick={() => setEditingProcurement({ 
-                                        ...editingProcurement!, 
-                                        boxId: null,
-                                        folderId: null,
-                                        shelfId: editingProcurement!.shelfId || null,
-                                        cabinetId: editingProcurement!.cabinetId || null
-                                    })}
-                                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${
-                                        !editingProcurement!.boxId 
-                                            ? 'bg-blue-600 text-white' 
-                                            : 'text-slate-400 hover:text-white'
-                                    }`}
-                                >
-                                    Shelf
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setEditingProcurement({ 
-                                        ...editingProcurement!, 
-                                        boxId: '', 
-                                        shelfId: null, 
-                                        cabinetId: null, 
-                                        folderId: null 
-                                    })}
-                                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${
-                                        editingProcurement!.boxId !== undefined && editingProcurement!.boxId !== null 
-                                            ? 'bg-blue-600 text-white' 
-                                            : 'text-slate-400 hover:text-white'
-                                    }`}
-                                >
-                                    Box
-                                </button>
-                            </div>
-                        </div>
-
-                        {!editingProcurement!.boxId && editingProcurement!.boxId !== '' ? (
-                            // Existing Shelf/Cabinet/Folder dropdowns
-                            <div className="grid grid-cols-3 gap-4 animate-in fade-in">
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Shelf</Label>
-                                    <Select
-                                        value={editingProcurement!.cabinetId}
-                                        onValueChange={(val) => setEditingProcurement({
-                                            ...editingProcurement!,
-                                            cabinetId: val,
-                                            shelfId: null,
-                                            folderId: null
-                                        })}
-                                    >
-                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            {cabinets.map((c) => (
-                                                <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Cabinet</Label>
-                                    <Select
-                                        value={editingProcurement!.shelfId}
-                                        onValueChange={(val) => setEditingProcurement({
-                                            ...editingProcurement!,
-                                            shelfId: val,
-                                            folderId: null
-                                        })}
-                                        disabled={!editingProcurement!.cabinetId}
-                                    >
-                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            {editAvailableShelves.map((s) => (
-                                                <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Folder</Label>
-                                    <Select
-                                        value={editingProcurement!.folderId}
-                                        onValueChange={(val) => setEditingProcurement({ ...editingProcurement!, folderId: val })}
-                                        disabled={!editingProcurement!.shelfId}
-                                    >
-                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            {editAvailableFolders.map((f) => (
-                                                <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        ) : (
-                            // NEW: Box selection with optional folder
-                            <div className="animate-in fade-in space-y-4">
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Box</Label>
-                                    <Select
-                                        value={editingProcurement!.boxId || ''}
-                                        onValueChange={(val) => setEditingProcurement({
-                                            ...editingProcurement!,
-                                            boxId: val,
-                                            shelfId: null, 
-                                            cabinetId: null, 
-                                            folderId: null
-                                        })}
-                                    >
-                                        <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectValue placeholder="Select Box" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            {boxes.map((b) => (
-                                                <SelectItem key={b.id} value={b.id}>{b.code} - {b.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                
-                                {/* NEW: Optional Folder in Box */}
-                                {editingProcurement!.boxId && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="text-slate-300">Folder in Box</Label>
-                                            <span className="text-xs text-slate-500">(Optional)</span>
-                                        </div>
-                                        <Select
-                                            value={editingProcurement!.folderId || 'none'}
-                                            onValueChange={(val) => setEditingProcurement({
-                                                ...editingProcurement!,
-                                                folderId: val === 'none' ? null : val
-                                            })}
+                            < div className="space-y-2 border-t border-slate-800 pt-4" >
+                                <div className="flex items-center justify-between mb-2">
+                                    <Label className="text-lg font-semibold text-white">Location</Label>
+                                    <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingProcurement({ ...editingProcurement, boxId: null })}
+                                            className={`px-3 py-1 rounded text-xs font-medium transition-all ${!editingProcurement.boxId ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
                                         >
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue placeholder="No Folder (Direct in Box)" />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectItem value="none">
-                                                    <div className="flex items-center gap-2">
-                                                        <Package className="h-3 w-3 text-slate-500" />
-                                                        <span>No Folder (Direct in Box)</span>
-                                                    </div>
-                                                </SelectItem>
-                                                {editAvailableBoxFolders.length > 0 ? (
-                                                    editAvailableBoxFolders.map((f) => (
-                                                        <SelectItem key={f.id} value={f.id}>
-                                                            <div className="flex items-center gap-2">
-                                                                <div 
-                                                                    className="h-3 w-3 rounded-full" 
-                                                                    style={{ backgroundColor: f.color || '#FF6B6B' }}
-                                                                />
-                                                                <span>{f.code} - {f.name}</span>
-                                                            </div>
-                                                        </SelectItem>
-                                                    ))
-                                                ) : (
-                                                    <SelectItem value="create-folder" disabled>
-                                                        <span className="text-slate-500 text-xs italic">
-                                                            No folders in this box. Create one in Folders page.
-                                                        </span>
-                                                    </SelectItem>
-                                                )}
-                                            </SelectContent>
-                                        </Select>
+                                            Shelf
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingProcurement({ ...editingProcurement, boxId: '', shelfId: null, cabinetId: null, folderId: null })} // Set boxId to managed empty string (to show dropdown) but clear others
+                                            className={`px-3 py-1 rounded text-xs font-medium transition-all ${editingProcurement.boxId !== undefined && editingProcurement.boxId !== null ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                        >
+                                            Box
+                                        </button>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                                </div>
+
+                                {
+                                    !editingProcurement.boxId && editingProcurement.boxId !== '' ? (
+                                        <div className="grid grid-cols-3 gap-4 animate-in fade-in">
+                                            <div className="space-y-2">
+                                                <Label className="text-slate-300">Shelf</Label>
+                                                <Select
+                                                    value={editingProcurement.cabinetId}
+                                                    onValueChange={(val) => setEditingProcurement({
+                                                        ...editingProcurement,
+                                                        cabinetId: val,
+                                                        cabinetId: val,
+                                                        shelfId: null,
+                                                        folderId: null
+                                                    })}
+                                                >
+                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                        {cabinets.map((c) => (
+                                                            <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-slate-300">Cabinet</Label>
+                                                <Select
+                                                    value={editingProcurement.shelfId}
+                                                    onValueChange={(val) => setEditingProcurement({
+                                                        ...editingProcurement,
+                                                        shelfId: val,
+                                                        shelfId: val,
+                                                        folderId: null
+                                                    })}
+                                                    disabled={!editingProcurement.cabinetId}
+                                                >
+                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                        {editAvailableShelves.map((s) => (
+                                                            <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-slate-300">Folder</Label>
+                                                <Select
+                                                    value={editingProcurement.folderId}
+                                                    onValueChange={(val) => setEditingProcurement({ ...editingProcurement, folderId: val })}
+                                                    disabled={!editingProcurement.shelfId}
+                                                >
+                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                        {editAvailableFolders.map((f) => (
+                                                            <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="animate-in fade-in">
+                                            <div className="space-y-2">
+                                                <Label className="text-slate-300">Box</Label>
+                                                <Select
+                                                    value={editingProcurement.boxId || ''}
+                                                    onValueChange={(val) => setEditingProcurement({
+                                                        ...editingProcurement,
+                                                        boxId: val,
+                                                        boxId: val,
+                                                        shelfId: null, cabinetId: null, folderId: null // Clear others
+                                                    })}
+                                                >
+                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                        <SelectValue placeholder="Select Box" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                        {boxes.map((b) => (
+                                                            <SelectItem key={b.id} value={b.id}>{b.code} - {b.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+                            </div >
 
                             <div className="border-t border-slate-800 pt-4">
                                 <div className="space-y-2">

@@ -97,101 +97,57 @@ const Folders: React.FC = () => {
         }
     }, [cabinetIdFromUrl]);
 
-    
-    const [parentType, setParentType] = useState<'shelf' | 'box'>('shelf');
-    const [selectedBoxId, setSelectedBoxId] = useState('');
-
-    // Updated resetForm function:
     const resetForm = () => {
         setName('');
         setCode('');
         setSelectedTier1Id('');
         setParentCabinetId('');
-        setSelectedBoxId('');
         setDescription('');
         setColor('#FF6B6B');
         setCurrentFolder(null);
-        setParentType('shelf');
     };
 
-    
-// Updated handleAdd function:
-const handleAdd = async () => {
-    const parentId = parentType === 'shelf' ? parentCabinetId : selectedBoxId;
-    
-    if (!name || !code || !parentId) {
-        toast.error('Name, Code, and Parent Location are required');
-        return;
-    }
+    const handleAdd = async () => {
+        if (!name || !code || !parentCabinetId) {
+            toast.error('Name, Code, and Parent Cabinet are required');
+            return;
+        }
 
-    try {
-        await addFolder(parentId, name, code, description, color, parentType);
-        setIsAddDialogOpen(false);
-        resetForm();
-        toast.success('Folder added successfully');
-    } catch (error) {
-        toast.error('Failed to add folder');
-    }
-};
+        try {
+            // folder.shelfId stores Parent Cabinet ID
+            await addFolder(parentCabinetId, name, code, description, color);
+            setIsAddDialogOpen(false);
+            resetForm();
+            toast.success('Folder added successfully');
+        } catch (error) {
+            toast.error('Failed to add folder');
+        }
+    };
 
-    // Updated handleEditClick function:
     const handleEditClick = (folder: Folder) => {
         setCurrentFolder(folder);
         setName(folder.name);
         setCode(folder.code);
 
-        // Determine parent type
-        if (folder.boxId) {
-            setParentType('box');
-            setSelectedBoxId(folder.boxId);
-            setSelectedTier1Id('');
-            setParentCabinetId('');
+        // folder.shelfId is Tier 2 (Cabinet/Shelf type). We need its parent (Tier 1) for the first dropdown.
+        const parentTier2 = shelves.find(s => s.id === folder.shelfId);
+        if (parentTier2) {
+            setSelectedTier1Id(parentTier2.cabinetId);
         } else {
-            setParentType('shelf');
-            setSelectedBoxId('');
-            // folder.shelfId is Tier 2 (Cabinet). We need its parent (Tier 1) for the first dropdown.
-            const parentTier2 = shelves.find(s => s.id === folder.shelfId);
-            if (parentTier2) {
-                setSelectedTier1Id(parentTier2.cabinetId);
-            } else {
-                setSelectedTier1Id('');
-            }
-            setParentCabinetId(folder.shelfId || '');
+            setSelectedTier1Id('');
         }
 
+        setParentCabinetId(folder.shelfId); // shelfId holds Cabinet ID (Tier 2)
         setDescription(folder.description || '');
         setColor(folder.color || '#FF6B6B');
         setIsEditDialogOpen(true);
     };
 
-    // Updated handleUpdate function:
     const handleUpdate = async () => {
-        if (!currentFolder || !name || !code) return;
-
-        const parentId = parentType === 'shelf' ? parentCabinetId : selectedBoxId;
-        if (!parentId) {
-            toast.error('Please select a parent location');
-            return;
-        }
+        if (!currentFolder || !name || !code || !parentCabinetId) return;
 
         try {
-            const updates: Partial<Folder> = {
-                name,
-                code,
-                description,
-                color
-            };
-
-            // Set the appropriate parent ID and clear the other
-            if (parentType === 'shelf') {
-                updates.shelfId = parentId;
-                updates.boxId = null;
-            } else {
-                updates.boxId = parentId;
-                updates.shelfId = null;
-            }
-
-            await updateFolder(currentFolder.id, updates);
+            await updateFolder(currentFolder.id, { shelfId: parentCabinetId, name, code, description, color });
             setIsEditDialogOpen(false);
             resetForm();
             toast.success('Folder updated successfully');
@@ -385,125 +341,59 @@ const handleAdd = async () => {
                             </AlertDialogContent>
                         </AlertDialog>
                     )}
-                    
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                         <DialogTrigger asChild>
                             <Button className="bg-blue-600 hover:bg-blue-700">
                                 <Plus className="mr-2 h-4 w-4" /> Add Folder
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="bg-[#0f172a] border-slate-800 text-white max-h-[80vh] overflow-y-auto">
+                        <DialogContent className="bg-[#0f172a] border-slate-800 text-white s-h-[80vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Add New Folder</DialogTitle>
                                 <DialogDescription className="text-slate-400">
-                                    Create a new folder inside a cabinet or box.
+                                    Create a new folder inside a cabinet.
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
-                                {/* NEW: Parent Type Toggle */}
                                 <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label className="text-right text-slate-300">Location Type</Label>
-                                    <div className="col-span-3 flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setParentType('shelf');
-                                                setSelectedBoxId('');
-                                            }}
-                                            className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-all ${
-                                                parentType === 'shelf' 
-                                                    ? 'bg-blue-600 text-white' 
-                                                    : 'text-slate-400 hover:text-white'
-                                            }`}
-                                        >
-                                            <Layers className="h-4 w-4 inline mr-1" />
-                                            In Shelf System
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setParentType('box');
-                                                setSelectedTier1Id('');
-                                                setParentCabinetId('');
-                                            }}
-                                            className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-all ${
-                                                parentType === 'box' 
-                                                    ? 'bg-blue-600 text-white' 
-                                                    : 'text-slate-400 hover:text-white'
-                                            }`}
-                                        >
-                                            <Package className="h-4 w-4 inline mr-1" />
-                                            In Box
-                                        </button>
-                                    </div>
+                                    <Label className="text-right text-slate-300">Shelf</Label>
+                                    <select
+                                        value={selectedTier1Id}
+                                        onChange={(e) => {
+                                            setSelectedTier1Id(e.target.value);
+                                            setParentCabinetId(''); // Reset Tier 2 selection
+                                        }}
+                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                    >
+                                        <option value="">Select Shelf</option>
+                                        {cabinets.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                                        ))}
+                                    </select>
                                 </div>
-
-                                {/* Conditional rendering based on parentType */}
-                                {parentType === 'shelf' ? (
-                                    <>
-                                        {/* Existing Shelf/Cabinet dropdowns */}
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                            <Label className="text-right text-slate-300">Shelf</Label>
-                                            <select
-                                                value={selectedTier1Id}
-                                                onChange={(e) => {
-                                                    setSelectedTier1Id(e.target.value);
-                                                    setParentCabinetId('');
-                                                }}
-                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                            >
-                                                <option value="">Select Shelf</option>
-                                                {cabinets.map(c => (
-                                                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                            <Label className="text-right text-slate-300">Parent Cabinet</Label>
-                                            <select
-                                                value={parentCabinetId}
-                                                onChange={(e) => setParentCabinetId(e.target.value)}
-                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                                disabled={!selectedTier1Id}
-                                            >
-                                                <option value="">Select Cabinet</option>
-                                                {shelves
-                                                    .filter(s => s.cabinetId === selectedTier1Id)
-                                                    .map(s => (
-                                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                                                    ))}
-                                            </select>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        {/* NEW: Box dropdown */}
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                            <Label className="text-right text-slate-300">Box</Label>
-                                            <select
-                                                value={selectedBoxId}
-                                                onChange={(e) => setSelectedBoxId(e.target.value)}
-                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                            >
-                                                <option value="">Select Box</option>
-                                                {boxes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(b => (
-                                                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Rest of the form remains the same */}
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right text-slate-300">Parent Cabinet</Label>
+                                    <select
+                                        value={parentCabinetId}
+                                        onChange={(e) => setParentCabinetId(e.target.value)}
+                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                        disabled={!selectedTier1Id}
+                                    >
+                                        <option value="">Select Cabinet</option>
+                                        {shelves
+                                            .filter(s => s.cabinetId === selectedTier1Id)
+                                            .map(s => (
+                                                <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                            ))}
+                                    </select>
+                                </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="name" className="text-right text-slate-300">Name</Label>
-                                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} 
-                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
+                                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="code" className="text-right text-slate-300">Code</Label>
-                                    <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} 
-                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
+                                    <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="color" className="text-right text-slate-300">Color</Label>
@@ -545,129 +435,12 @@ const handleAdd = async () => {
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="desc" className="text-right text-slate-300">Description</Label>
-                                    <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} 
-                                            className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
+                                    <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
                                 </div>
                             </div>
                             <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} 
-                                        className="border-slate-700 text-white hover:bg-slate-800">Cancel</Button>
+                                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="border-slate-700 text-white hover:bg-slate-800">Cancel</Button>
                                 <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">Save Folder</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-
-                    {/* EDIT DIALOG - Similar structure with same toggle */}
-                    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                        <DialogContent className="bg-[#0f172a] border-slate-800 text-white">
-                            <DialogHeader>
-                                <DialogTitle>Edit Folder</DialogTitle>
-                                <DialogDescription className="text-slate-400">
-                                    Update folder details.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                {/* Same toggle and conditional dropdowns as Add Dialog */}
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label className="text-right text-slate-300">Location Type</Label>
-                                    <div className="col-span-3 flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setParentType('shelf');
-                                                setSelectedBoxId('');
-                                            }}
-                                            className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-all ${
-                                                parentType === 'shelf' 
-                                                    ? 'bg-blue-600 text-white' 
-                                                    : 'text-slate-400 hover:text-white'
-                                            }`}
-                                        >
-                                            <Layers className="h-4 w-4 inline mr-1" />
-                                            In Shelf System
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setParentType('box');
-                                                setSelectedTier1Id('');
-                                                setParentCabinetId('');
-                                            }}
-                                            className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-all ${
-                                                parentType === 'box' 
-                                                    ? 'bg-blue-600 text-white' 
-                                                    : 'text-slate-400 hover:text-white'
-                                            }`}
-                                        >
-                                            <Package className="h-4 w-4 inline mr-1" />
-                                            In Box
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {parentType === 'shelf' ? (
-                                    <>
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                            <Label className="text-right text-slate-300">Shelf</Label>
-                                            <select
-                                                value={selectedTier1Id}
-                                                onChange={(e) => {
-                                                    setSelectedTier1Id(e.target.value);
-                                                    setParentCabinetId('');
-                                                }}
-                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                            >
-                                                <option value="">Select Shelf</option>
-                                                {cabinets.map(c => (
-                                                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-4 items-center gap-4">
-                                            <Label className="text-right text-slate-300">Parent Cabinet</Label>
-                                            <select
-                                                value={parentCabinetId}
-                                                onChange={(e) => setParentCabinetId(e.target.value)}
-                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                                disabled={!selectedTier1Id}
-                                            >
-                                                <option value="">Select Cabinet</option>
-                                                {shelves
-                                                    .filter(s => s.cabinetId === selectedTier1Id)
-                                                    .map(s => (
-                                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                                                    ))}
-                                            </select>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label className="text-right text-slate-300">Box</Label>
-                                        <select
-                                            value={selectedBoxId}
-                                            onChange={(e) => setSelectedBoxId(e.target.value)}
-                                            className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                        >
-                                            <option value="">Select Box</option>
-                                            {boxes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(b => (
-                                                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-
-                                {/* Name, Code, Color, Description fields - same as Add */}
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="edit-name" className="text-right text-slate-300">Name</Label>
-                                    <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} 
-                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
-                                </div>
-                                {/* ... other fields ... */}
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} 
-                                        className="border-slate-700 text-white hover:bg-slate-800">Cancel</Button>
-                                <Button onClick={handleUpdate} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>

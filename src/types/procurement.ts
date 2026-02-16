@@ -22,8 +22,7 @@ export interface Shelf {
 
 export interface Folder {
     id: string;
-    shelfId?: string | null; // Optional - for folders in shelves
-    boxId?: string | null; // NEW: Optional - for folders in boxes
+    shelfId: string;
     name: string;
     code: string; // e.g., "F1", "F2"
     description?: string;
@@ -85,7 +84,7 @@ export interface Procurement {
     description: string;
     dateAdded: string; // Date the record was added to system
 
-    // Location tracking (Cabinet > Shelf > Folder OR Box > Folder OR Box)
+    // Location tracking (Cabinet > Shelf > Folder OR Box)
     cabinetId?: string | null;
     shelfId?: string | null;
     folderId?: string | null;
