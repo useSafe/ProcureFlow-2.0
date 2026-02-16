@@ -210,11 +210,20 @@ export const deleteShelf = async (id: string): Promise<void> => {
 };
 
 // --- Folder ---
-export const addFolder = async (shelfId: string, name: string, code: string, description?: string, color?: string): Promise<Folder> => {
+// UPDATED: Now supports both shelfId and boxId
+export const addFolder = async (
+    parentId: string, 
+    name: string, 
+    code: string, 
+    description?: string, 
+    color?: string,
+    parentType: 'shelf' | 'box' = 'shelf'
+): Promise<Folder> => {
     const id = crypto.randomUUID();
     const newFolder: Folder = {
         id,
-        shelfId,
+        shelfId: parentType === 'shelf' ? parentId : null,
+        boxId: parentType === 'box' ? parentId : null,
         name: name.trim(),
         code: code.trim().toUpperCase(),
         description: description?.trim(),
@@ -257,6 +266,7 @@ export const updateBox = async (id: string, updates: Partial<Box>): Promise<void
     await update(ref(db, 'boxes/' + id), updates);
 };
 
+// UPDATED: Now also deletes folders in the box
 export const deleteBox = async (id: string): Promise<void> => {
     // Check for procurements
     const procurements = await getProcurements();
@@ -264,6 +274,15 @@ export const deleteBox = async (id: string): Promise<void> => {
     if (hasFiles) {
         throw new Error("Cannot delete Box: It contains active records. Please move or delete them first.");
     }
+
+    // NEW: Delete all folders in this box
+    const folders = await getFolders();
+    const boxFolders = folders.filter(f => f.boxId === id);
+    
+    for (const folder of boxFolders) {
+        await deleteFolder(folder.id);
+    }
+
     await remove(ref(db, 'boxes/' + id));
 };
 
