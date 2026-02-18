@@ -210,17 +210,40 @@ export const deleteShelf = async (id: string): Promise<void> => {
 };
 
 // --- Folder ---
-export const addFolder = async (shelfId: string, name: string, code: string, description?: string, color?: string): Promise<Folder> => {
+export const addFolder = async (
+    parentId: string, // shelfId OR boxId
+    name: string,
+    code: string,
+    description?: string,
+    color?: string,
+    parentType: 'shelf' | 'box' = 'shelf'
+): Promise<Folder> => {
     const id = crypto.randomUUID();
-    const newFolder: Folder = {
+    // Calculate Stack Number
+    const allFolders = await getFolders();
+    const siblingFolders = allFolders.filter(f => {
+        if (parentType === 'shelf') return f.shelfId === parentId;
+        return f.boxId === parentId;
+    });
+    const maxStack = Math.max(...siblingFolders.map(f => f.stackNumber || 0), 0);
+    const newStackNumber = maxStack + 1;
+
+    const newFolder: any = {
         id,
-        shelfId,
         name: name.trim(),
         code: code.trim().toUpperCase(),
-        description: description?.trim(),
+        description: description?.trim() || '',
         color: color || '#FF6B6B',
         createdAt: new Date().toISOString(),
+        stackNumber: newStackNumber
     };
+
+    if (parentType === 'shelf') {
+        newFolder.shelfId = parentId;
+    } else {
+        newFolder.boxId = parentId;
+    }
+
     await set(ref(db, 'folders/' + id), newFolder);
     return newFolder;
 };
@@ -240,30 +263,61 @@ export const deleteFolder = async (id: string): Promise<void> => {
 };
 
 // --- Box ---
-export const addBox = async (name: string, code: string, description?: string): Promise<Box> => {
+export const addBox = async (
+    boxData: { name: string; code: string; description?: string; cabinetId?: string; shelfId?: string }
+): Promise<Box> => {
     const id = crypto.randomUUID();
-    const newBox: Box = {
+    const now = new Date().toISOString();
+
+    const newBox: any = {
         id,
-        name: name.trim(),
-        code: code.trim().toUpperCase(),
-        description: description?.trim(),
-        createdAt: new Date().toISOString(),
+        name: boxData.name,
+        code: boxData.code,
+        description: boxData.description || '',
+        createdAt: now
     };
+
+    if (boxData.cabinetId) newBox.cabinetId = boxData.cabinetId;
+    if (boxData.shelfId) newBox.shelfId = boxData.shelfId;
+
     await set(ref(db, 'boxes/' + id), newBox);
     return newBox;
 };
 
 export const updateBox = async (id: string, updates: Partial<Box>): Promise<void> => {
-    await update(ref(db, 'boxes/' + id), updates);
+    await update(ref(db, `boxes/${id}`), updates);
 };
 
 export const deleteBox = async (id: string): Promise<void> => {
-    // Check for procurements
+    // Check for procurements directly in box (legacy support or if we allow direct files)
+    // AND check for folders in box
     const procurements = await getProcurements();
+    const folders = await getFolders();
+
     const hasFiles = procurements.some(p => p.boxId === id);
+    const hasFolders = folders.some(f => f.boxId === id);
+
     if (hasFiles) {
         throw new Error("Cannot delete Box: It contains active records. Please move or delete them first.");
     }
+
+    // Allow deleting if only empty folders? Or cascade delete folders?
+    // User expectation for "Cabinets" was cascading. Let's do cascading for Box->Folder too.
+    const boxFolders = folders.filter(f => f.boxId === id);
+
+    // Check if any of these folders have files
+    for (const folder of boxFolders) {
+        const folderHasFiles = procurements.some(p => p.folderId === folder.id);
+        if (folderHasFiles) {
+            throw new Error(`Cannot delete Box: Folder '${folder.name}' contains records. Please emtpy it first.`);
+        }
+    }
+
+    // Delete folders
+    for (const folder of boxFolders) {
+        await deleteFolder(folder.id);
+    }
+
     await remove(ref(db, 'boxes/' + id));
 };
 
@@ -364,6 +418,7 @@ export const addProcurement = async (
         createdByName: userName,
         createdAt: now,
         updatedAt: now,
+        progressStatus: safeProcurement.progressStatus || 'Not yet Acted',
         // If adding directly to stack (archived), set stackOrderDate
         ...(safeProcurement.status === 'archived' ? { stackOrderDate: Date.now() } : {}),
     };
@@ -468,6 +523,82 @@ export const getLocationStats = async (): Promise<LocationStats[]> => {
         }))
         .filter(stat => stat.count > 0)
         .sort((a, b) => b.count - a.count);
+};
+
+// ========== Helper Functions ==========
+
+/**
+ * Get folder parent container display string
+ * Returns either "D1 → C1" for drawer/cabinet or "B1" for box
+ */
+export const getFolderParentContainer = async (folder: Folder): Promise<string> => {
+    if (folder.boxId) {
+        // Folder is in a Box
+        const boxes = await getBoxes();
+        const box = boxes.find(b => b.id === folder.boxId);
+        return box ? `${box.name} (${box.code})` : 'Unknown Box';
+    } else if (folder.shelfId) {
+        // Folder is in Drawer→Cabinet hierarchy
+        const shelves = await getShelves();
+        const cabinets = await getCabinets();
+        const shelf = shelves.find(s => s.id === folder.shelfId);
+        if (shelf) {
+            const cabinet = cabinets.find(c => c.id === shelf.cabinetId);
+            return cabinet ? `${cabinet.name} (${cabinet.code}) → ${shelf.name} (${shelf.code})` : shelf.name;
+        }
+    }
+
+    return 'No Parent';
+};
+
+/**
+ * Get count of folders inside a box
+ */
+export const getBoxFolderCount = async (boxId: string): Promise<number> => {
+    const allFolders = await getFolders();
+    return allFolders.filter(f => f.boxId === boxId).length;
+};
+
+/**
+ * Get count of files inside a box (across all folders)
+ */
+export const getBoxFileCount = async (boxId: string): Promise<number> => {
+    const allProcurements = await getProcurements();
+    return allProcurements.filter(p => p.boxId === boxId).length;
+};
+
+/**
+ * Get location path string for a procurement
+ * Returns formatted string like "D1 → C1 → F1" or "B1 → F1"
+ */
+export const getLocationPath = async (procurement: Procurement): Promise<string> => {
+    if (procurement.boxId) {
+        // Box hierarchy
+        const boxes = await getBoxes();
+        const folders = await getFolders();
+        const box = boxes.find(b => b.id === procurement.boxId);
+        const folder = folders.find(f => f.id === procurement.folderId);
+
+        if (box && folder) {
+            return `${box.code} → ${folder.code}`;
+        }
+        return box?.code || 'Unknown';
+    } else {
+        // Drawer-Cabinet hierarchy
+        const cabinets = await getCabinets();
+        const shelves = await getShelves();
+        const folders = await getFolders();
+
+        const cabinet = cabinets.find(c => c.id === procurement.cabinetId);
+        const shelf = shelves.find(s => s.id === procurement.shelfId);
+        const folder = folders.find(f => f.id === procurement.folderId);
+
+        let path = cabinet?.code || '?';
+        if (shelf) path += ` → ${shelf.code}`;
+        if (folder) path += ` → ${folder.code}`;
+
+        return path;
+    }
 };
 
 // ========== Initialization ==========

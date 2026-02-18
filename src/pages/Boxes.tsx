@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box } from '@/types/procurement';
+import { Box, Shelf } from '@/types/procurement';
 import { addBox, updateBox, deleteBox } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,13 +44,13 @@ import {
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Plus, Search, Pencil, Trash2, Package, Eye } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, Eye, FolderOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { useData } from '@/contexts/DataContext';
 
 const Boxes: React.FC = () => {
     const navigate = useNavigate();
-    const { boxes, procurements } = useData();
+    const { boxes, procurements, cabinets, shelves, folders } = useData();
 
     // UI State
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -66,13 +66,25 @@ const Boxes: React.FC = () => {
     const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 
     // Form State
-    const [formData, setFormData] = useState({ name: '', code: '', description: '' });
+    const [formData, setFormData] = useState({ name: '', code: '', description: '', cabinetId: '', shelfId: '' });
     const [selectedBox, setSelectedBox] = useState<Box | null>(null);
+
+    // Filtered options for forms
+    const [availableShelves, setAvailableShelves] = useState<Shelf[]>([]);
+
+    React.useEffect(() => {
+        if (formData.cabinetId) {
+            setAvailableShelves(shelves.filter(s => s.cabinetId === formData.cabinetId));
+        } else {
+            setAvailableShelves([]);
+        }
+    }, [formData.cabinetId, shelves]);
 
     // Stats
     const getBoxStats = (boxId: string) => {
         const myFiles = procurements.filter(p => p.boxId === boxId);
-        return { files: myFiles.length };
+        const myFolders = folders.filter(f => f.boxId === boxId);
+        return { files: myFiles.length, folders: myFolders.length };
     };
 
     // Filter & Sort
@@ -96,7 +108,7 @@ const Boxes: React.FC = () => {
                 const bNum = getCodeNum(b.code);
                 comparison = aNum === bNum ? a.code.localeCompare(b.code) : aNum - bNum;
             } else if (sortField === 'contents') {
-                comparison = getBoxStats(a.id).files - getBoxStats(b.id).files;
+                comparison = getBoxStats(a.id).folders - getBoxStats(b.id).folders;
             } else if (sortField === 'date') {
                 comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
             }
@@ -104,7 +116,7 @@ const Boxes: React.FC = () => {
         });
 
     const resetForm = () => {
-        setFormData({ name: '', code: '', description: '' });
+        setFormData({ name: '', code: '', description: '', cabinetId: '', shelfId: '' });
         setSelectedBox(null);
     };
 
@@ -114,12 +126,17 @@ const Boxes: React.FC = () => {
             return;
         }
         try {
-            await addBox(formData.name, formData.code, formData.description);
+            await addBox({
+                name: formData.name,
+                code: formData.code,
+                description: formData.description,
+            });
             toast.success('Box added successfully');
             setIsAddOpen(false);
             resetForm();
-        } catch (error) {
-            toast.error('Failed to add box');
+        } catch (error: any) {
+            console.error(error);
+            toast.error(`Failed to add box: ${error.message || 'Unknown error'}`);
         }
     };
 
@@ -168,7 +185,9 @@ const Boxes: React.FC = () => {
         setFormData({
             name: box.name,
             code: box.code,
-            description: box.description || ''
+            description: box.description || '',
+            cabinetId: box.cabinetId || '',
+            shelfId: box.shelfId || ''
         });
         setIsEditOpen(true);
     };
@@ -242,6 +261,7 @@ const Boxes: React.FC = () => {
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
+                                { /* Cabinet and Shelf selection removed as Boxes are now root entities */}
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="name" className="text-right text-slate-300">Name</Label>
                                     <Input
@@ -368,19 +388,21 @@ const Boxes: React.FC = () => {
                                             {format(new Date(box.createdAt), 'MMM d, yyyy')}
                                         </TableCell>
                                         <TableCell className="text-slate-300">
-                                            {getBoxStats(box.id).files} files
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-400 border border-blue-800/50">
+                                                {getBoxStats(box.id).folders} folders
+                                            </span>
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    title="View Files"
-                                                    onClick={() => handleViewFiles(box.id)}
+                                                    title="View Folders"
+                                                    onClick={() => navigate(`/folders?boxId=${box.id}`)}
                                                     className="h-8 bg-emerald-600/10 border-emerald-600/20 text-emerald-500 hover:bg-emerald-600/20 hover:text-emerald-400"
                                                 >
-                                                    <Eye className="h-4 w-4 mr-1" />
-                                                    View Files
+                                                    <FolderOpen className="h-4 w-4 mr-1" />
+                                                    View Folders
                                                 </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => openEdit(box)} className="h-8 w-8 text-slate-400 hover:text-white">
                                                     <Pencil className="h-4 w-4" />
@@ -395,8 +417,8 @@ const Boxes: React.FC = () => {
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>Delete Box?</AlertDialogTitle>
                                                             <AlertDialogDescription className="text-slate-400">
-                                                                {getBoxStats(box.id).files > 0
-                                                                    ? <span className="text-red-400">Cannot delete box. It contains {getBoxStats(box.id).files} files. Empty it first.</span>
+                                                                {getBoxStats(box.id).folders > 0
+                                                                    ? <span className="text-red-400">Cannot delete box. It contains {getBoxStats(box.id).folders} folders. Empty it first.</span>
                                                                     : <span>This will permanently delete <strong>{box.name}</strong>.</span>
                                                                 }
                                                             </AlertDialogDescription>
@@ -405,8 +427,8 @@ const Boxes: React.FC = () => {
                                                             <AlertDialogCancel className="bg-transparent border-slate-700 text-white hover:bg-slate-800">Cancel</AlertDialogCancel>
                                                             <AlertDialogAction
                                                                 onClick={() => handleDelete(box.id)}
-                                                                disabled={getBoxStats(box.id).files > 0}
-                                                                className={getBoxStats(box.id).files > 0 ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700 text-white"}
+                                                                disabled={getBoxStats(box.id).folders > 0}
+                                                                className={getBoxStats(box.id).folders > 0 ? "bg-slate-700 text-slate-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700 text-white"}
                                                             >
                                                                 Delete
                                                             </AlertDialogAction>

@@ -87,9 +87,9 @@ const Shelves: React.FC = () => {
             await addCabinet(name, code, description);
             setIsAddDialogOpen(false);
             resetForm();
-            toast.success('Shelf added successfully');
+            toast.success('Drawer added successfully');
         } catch (error) {
-            toast.error('Failed to add shelf');
+            toast.error('Failed to add drawer');
         }
     };
 
@@ -108,21 +108,21 @@ const Shelves: React.FC = () => {
             await updateCabinet(currentShelf.id, { name, code, description });
             setIsEditDialogOpen(false);
             resetForm();
-            toast.success('Shelf updated successfully');
+            toast.success('Drawer updated successfully');
         } catch (error) {
-            toast.error('Failed to update shelf');
+            toast.error('Failed to update drawer');
         }
     };
 
     const handleDelete = async (id: string) => {
         try {
             await deleteCabinet(id);
-            toast.success('Shelf deleted successfully');
+            toast.success('Drawer deleted successfully');
             if (selectedIds.includes(id)) {
                 setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
             }
         } catch (error) {
-            toast.error('Failed to delete shelf');
+            toast.error('Failed to delete drawer');
         }
     };
 
@@ -142,11 +142,11 @@ const Shelves: React.FC = () => {
 
         try {
             await Promise.all(selectedIds.map(id => deleteCabinet(id)));
-            toast.success(`${selectedIds.length} shelves deleted successfully`);
+            toast.success(`${selectedIds.length} drawers deleted successfully`);
             setSelectedIds([]);
             setIsBulkDeleteDialogOpen(false);
         } catch (error) {
-            toast.error('Failed to delete some shelves');
+            toast.error('Failed to delete some drawers');
         }
     };
 
@@ -230,8 +230,8 @@ const Shelves: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Shelves</h1>
-                    <p className="text-slate-400 mt-1">Manage physical storage shelves (Tier 1)</p>
+                    <h1 className="text-3xl font-bold text-white">Drawers</h1>
+                    <p className="text-slate-400 mt-1">Manage physical storage drawers (Tier 1)</p>
                 </div>
                 <div className="flex gap-2">
                     {selectedIds.length > 0 && (
@@ -244,9 +244,9 @@ const Shelves: React.FC = () => {
                             </AlertDialogTrigger>
                             <AlertDialogContent className="bg-[#1e293b] border-slate-800 text-white">
                                 <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete {selectedIds.length} Shelves?</AlertDialogTitle>
+                                    <AlertDialogTitle>Delete {selectedIds.length} Drawers?</AlertDialogTitle>
                                     <AlertDialogDescription className="text-slate-400">
-                                        This will permanently delete the selected shelves and ALL content inside them.
+                                        This will permanently delete the selected drawers and ALL content inside them.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -259,33 +259,33 @@ const Shelves: React.FC = () => {
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                         <DialogTrigger asChild>
                             <Button className="bg-blue-600 hover:bg-blue-700">
-                                <Plus className="mr-2 h-4 w-4" /> Add Shelf
+                                <Plus className="mr-2 h-4 w-4" /> Add Drawer
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="bg-[#0f172a] border-slate-800 text-white">
                             <DialogHeader>
-                                <DialogTitle>Add New Shelf</DialogTitle>
+                                <DialogTitle>Add New Drawer</DialogTitle>
                                 <DialogDescription className="text-slate-400">
-                                    Create a new top-level storage shelf.
+                                    Create a new top-level storage drawer.
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="name" className="text-right text-slate-300">Name</Label>
-                                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" placeholder="Shelf 1" />
+                                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" placeholder="Drawer 1" />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="code" className="text-right text-slate-300">Code</Label>
-                                    <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" placeholder="S1" />
+                                    <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" placeholder="D1" />
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="desc" className="text-right text-slate-300">Description</Label>
-                                    <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" placeholder="Main storage shelf..." />
+                                    <Textarea id="desc" value={description} onChange={(e) => setDescription(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" placeholder="Main storage drawer..." />
                                 </div>
                             </div>
                             <DialogFooter>
                                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="border-slate-700 text-white hover:bg-slate-800">Cancel</Button>
-                                <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">Save Shelf</Button>
+                                <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700">Save Drawer</Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -296,7 +296,7 @@ const Shelves: React.FC = () => {
                 <CardContent className="p-4">
                     <div className="flex gap-4 items-center flex-wrap">
                         <Input
-                            placeholder="Search shelves..."
+                            placeholder="Search drawers..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-[250px] bg-[#1e293b] border-slate-700 text-white"
@@ -346,7 +346,7 @@ const Shelves: React.FC = () => {
                             {filteredShelves.length === 0 ? (
                                 <TableRow className="border-slate-800">
                                     <TableCell colSpan={5} className="h-24 text-center text-slate-500">
-                                        No shelves found. Add your first shelf.
+                                        No drawers found. Add your first drawer.
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -409,7 +409,7 @@ const Shelves: React.FC = () => {
                                                     </AlertDialogTrigger>
                                                     <AlertDialogContent className="bg-[#1e293b] border-slate-800 text-white">
                                                         <AlertDialogHeader>
-                                                            <AlertDialogTitle>Delete Shelf?</AlertDialogTitle>
+                                                            <AlertDialogTitle>Delete Drawer?</AlertDialogTitle>
                                                             <AlertDialogDescription className="text-slate-400">
                                                                 {(() => {
                                                                     const stats = getShelfStats(shelf.id);
@@ -418,7 +418,7 @@ const Shelves: React.FC = () => {
                                                                     if (hasContents) {
                                                                         return (
                                                                             <div className="text-red-400 font-medium border border-red-400/20 bg-red-400/10 p-3 rounded-md">
-                                                                                Cannot delete this shelf.<br />
+                                                                                Cannot delete this drawer.<br />
                                                                                 It contains:<br />
                                                                                 <ul className="list-disc list-inside mt-1 ml-2 text-sm">
                                                                                     {stats.cabinets > 0 && <li><strong>{stats.cabinets}</strong> Cabinet{stats.cabinets !== 1 ? 's' : ''}</li>}
@@ -467,9 +467,9 @@ const Shelves: React.FC = () => {
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent className="bg-[#0f172a] border-slate-800 text-white">
                     <DialogHeader>
-                        <DialogTitle>Edit Shelf</DialogTitle>
+                        <DialogTitle>Edit Drawer</DialogTitle>
                         <DialogDescription className="text-slate-400">
-                            Update shelf details.
+                            Update drawer details.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">

@@ -45,7 +45,8 @@ import {
   Settings,
   Building2,
   Library,
-  Archive
+  Archive,
+  Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -71,13 +72,22 @@ const navItems: NavItem[] = [
     label: 'Storages',
     icon: Library,
     children: [
-      { path: '/shelves', label: 'Shelves', icon: Layers },
+      { path: '/shelves', label: 'Drawers', icon: Layers },
       { path: '/cabinets', label: 'Cabinets', icon: Archive },
       { path: '/folders', label: 'Folders', icon: FolderOpen },
     ],
   },
-  { path: '/procurement/add', label: 'Add Procurement', icon: FilePlus },
-  { path: '/procurement/list', label: 'Records', icon: FileText },
+  {
+    label: 'Procurement',
+    icon: FileText,
+    children: [
+      { path: '/procurement/add', label: 'Add New', icon: FilePlus },
+      { path: '/procurement/list', label: 'All Records', icon: FileText },
+      { path: '/procurement/svp', label: 'SVP Records', icon: FileText },
+      { path: '/procurement/regular', label: 'Regular Bidding', icon: FileText },
+      { path: '/procurement/progress', label: 'Progress Tracking', icon: Activity },
+    ]
+  },
   { path: '/visual-allocation', label: 'Visual Map', icon: Map },
   { path: '/divisions', label: 'Divisions', icon: Building2, adminOnly: true }, // Added Divisions
   { path: '/users', label: 'User Management', icon: Users, adminOnly: true },

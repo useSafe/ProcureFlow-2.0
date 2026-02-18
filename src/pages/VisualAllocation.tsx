@@ -31,7 +31,7 @@ const VisualAllocation: React.FC = () => {
     const sortedFolders = [...folders].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     // View State
-    const [viewMode, setViewMode] = useState<'shelves' | 'cabinets' | 'folders' | 'files' | 'boxes' | 'box_files'>('shelves');
+    const [viewMode, setViewMode] = useState<'shelves' | 'cabinets' | 'folders' | 'files' | 'boxes' | 'box_folders'>('shelves');
     const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null);
     const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null);
     const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -41,19 +41,20 @@ const VisualAllocation: React.FC = () => {
     // Filter Logic
     // Shelf (S1) -> Cabinet (C1): Cabinet.cabinetId === Shelf.id
     // Cabinet (C1) -> Folder (F1): Folder.shelfId === Cabinet.id
-    const getCabinetsForShelf = (shelfId: string) => cabinets.filter(c => c.cabinetId === shelfId); // FIXED: field is cabinetId
+    const getCabinetsForShelf = (shelfId: string) => cabinets.filter(c => c.cabinetId === shelfId);
     const getFoldersForCabinet = (cabinetId: string) => sortedFolders.filter(f => f.shelfId === cabinetId);
+    // Box (B1) -> Folder (F1): Folder.boxId === Box.id
+    const getFoldersForBox = (boxId: string) => sortedFolders.filter(f => f.boxId === boxId);
+
     const getFilesForFolder = (folderId: string) => procurements.filter(p => p.folderId === folderId).sort((a, b) => (a.prNumber || '').localeCompare(b.prNumber || '', undefined, { numeric: true }));
-    const getFilesForBox = (boxId: string) => procurements.filter(p => p.boxId === boxId).sort((a, b) => (a.prNumber || '').localeCompare(b.prNumber || '', undefined, { numeric: true }));
+    // Legacy support or direct files in box (optional, but hierarchy is Box->Folder->File now)
+    const getFilesForBox = (boxId: string) => procurements.filter(p => p.boxId === boxId && !p.folderId).sort((a, b) => (a.prNumber || '').localeCompare(b.prNumber || '', undefined, { numeric: true }));
 
     // Helpers for Breadcrumbs
     const currentShelf = shelves.find(s => s.id === selectedShelfId);
     const currentCabinet = cabinets.find(c => c.id === selectedCabinetId);
     const currentFolder = folders.find(f => f.id === selectedFolderId);
     const currentBox = boxes.find(b => b.id === selectedBoxId);
-
-    // Box Helpers
-
 
     // Handlers
     const handleSelectShelf = (shelfId: string) => {
@@ -77,20 +78,25 @@ const VisualAllocation: React.FC = () => {
 
     const handleSelectBox = (boxId: string) => {
         setSelectedBoxId(boxId);
-        setViewMode('box_files');
+        setViewMode('box_folders');
     };
 
     const goBack = () => {
         if (viewMode === 'files') {
-            setViewMode('folders');
-            setSelectedFolderId(null);
+            if (selectedBoxId) {
+                setViewMode('box_folders');
+                setSelectedFolderId(null);
+            } else {
+                setViewMode('folders');
+                setSelectedFolderId(null);
+            }
         } else if (viewMode === 'folders') {
             setViewMode('cabinets');
             setSelectedCabinetId(null);
         } else if (viewMode === 'cabinets') {
             setViewMode('shelves');
             setSelectedShelfId(null);
-        } else if (viewMode === 'box_files') {
+        } else if (viewMode === 'box_folders') {
             setViewMode('boxes');
             setSelectedBoxId(null);
         }
@@ -100,7 +106,7 @@ const VisualAllocation: React.FC = () => {
         <div className="space-y-6 fade-in animate-in duration-500">
             {/* Header & Breadcrumbs */}
             <div className="flex items-center gap-2 text-sm text-slate-400 mb-4 font-mono">
-                <Button variant="ghost" className="p-0 h-auto hover:bg-transparent hover:text-white" onClick={() => { setViewMode('shelves'); setSelectedShelfId(null); setSelectedCabinetId(null); setSelectedFolderId(null); }}>
+                <Button variant="ghost" className="p-0 h-auto hover:bg-transparent hover:text-white" onClick={() => { setViewMode('shelves'); setSelectedShelfId(null); setSelectedCabinetId(null); setSelectedFolderId(null); setSelectedBoxId(null); }}>
                     STORAGE
                 </Button>
                 {selectedShelfId && (
@@ -126,17 +132,20 @@ const VisualAllocation: React.FC = () => {
                     </>
                 )}
                 {/* Box Breadcrumbs */}
-                {(viewMode === 'boxes' || viewMode === 'box_files') && (
-                    <Button variant="ghost" className="p-0 h-auto hover:bg-transparent hover:text-white" onClick={() => { setViewMode('boxes'); setSelectedBoxId(null); }}>
+                {(viewMode === 'boxes' || viewMode === 'box_folders' || (viewMode === 'files' && selectedBoxId)) && (
+                    <Button variant="ghost" className="p-0 h-auto hover:bg-transparent hover:text-white" onClick={() => { setViewMode('boxes'); setSelectedBoxId(null); setSelectedShelfId(null); setSelectedCabinetId(null); setSelectedFolderId(null); }}>
                         BOX STORAGE
                     </Button>
                 )}
                 {selectedBoxId && (
                     <>
                         <ChevronRight className="h-4 w-4" />
-                        <span className="text-white">{currentBox?.code}</span>
+                        <Button variant="ghost" className="p-0 h-auto hover:bg-transparent hover:text-white" onClick={() => { setViewMode('box_folders'); setSelectedFolderId(null); }}>
+                            {currentBox?.code}
+                        </Button>
                     </>
                 )}
+                {/* Note: Files breadcrumb for Box mode handled by generic 'selectedFolderId' check above if we want, or we can explicit it here */}
             </div>
 
             <div className="flex items-center justify-between gap-4">
@@ -148,7 +157,7 @@ const VisualAllocation: React.FC = () => {
                         {viewMode === 'folders' && `Viewing Folders in Cabinet ${currentCabinet?.name}`}
                         {viewMode === 'files' && `Viewing Files in Folder ${currentFolder?.name}`}
                         {viewMode === 'boxes' && 'Select a Box to view its contents.'}
-                        {viewMode === 'box_files' && `Viewing Files in Box ${currentBox?.name}`}
+                        {viewMode === 'box_folders' && `Viewing Folders in Box ${currentBox?.name}`}
                     </p>
                 </div>
 
@@ -158,7 +167,7 @@ const VisualAllocation: React.FC = () => {
                         <Button
                             variant={viewMode === 'shelves' ? 'secondary' : 'ghost'}
                             size="sm"
-                            onClick={() => setViewMode('shelves')}
+                            onClick={() => { setViewMode('shelves'); setSelectedBoxId(null); }}
                             className={viewMode === 'shelves' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400 hover:text-white'}
                         >
                             <Grid className="h-4 w-4 mr-2" />
@@ -167,7 +176,7 @@ const VisualAllocation: React.FC = () => {
                         <Button
                             variant={viewMode === 'boxes' ? 'secondary' : 'ghost'}
                             size="sm"
-                            onClick={() => setViewMode('boxes')}
+                            onClick={() => { setViewMode('boxes'); setSelectedShelfId(null); setSelectedCabinetId(null); setSelectedFolderId(null); }}
                             className={viewMode === 'boxes' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400 hover:text-white'}
                         >
                             <Archive className="h-4 w-4 mr-2" />
@@ -361,13 +370,32 @@ const VisualAllocation: React.FC = () => {
                                             {box.code}
                                         </div>
                                         <span className="text-xs text-slate-400 font-mono">
-                                            {getFilesForBox(box.id).length} Files
+                                            {getFoldersForBox(box.id).length} Folders
                                         </span>
                                     </div>
 
                                     <div className="mt-12 pt-2">
                                         <h3 className="text-white font-bold text-lg mb-1 truncate">{box.name}</h3>
-                                        <p className="text-slate-400 text-sm line-clamp-2 min-h-[2.5em]">{box.description}</p>
+                                        <p className="text-slate-400 text-sm line-clamp-2 min-h-[2.5em] mb-2">{box.description}</p>
+
+                                        {/* Folders List inside Box */}
+                                        <div className="space-y-1 border-t border-slate-700/50 pt-2">
+                                            {getFoldersForBox(box.id).slice(0, 3).map(f => (
+                                                <div key={f.id} className="text-[10px] text-slate-500 flex items-center gap-1.5 truncate">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50"></div>
+                                                    <span className="font-mono text-blue-400/70">{f.code}</span>
+                                                    <span className="truncate">{f.name}</span>
+                                                </div>
+                                            ))}
+                                            {getFoldersForBox(box.id).length > 3 && (
+                                                <div className="text-[10px] text-slate-600 pl-3 italic">
+                                                    + {getFoldersForBox(box.id).length - 3} more folders
+                                                </div>
+                                            )}
+                                            {getFoldersForBox(box.id).length === 0 && (
+                                                <div className="text-[10px] text-slate-600 italic">No folders</div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="absolute bottom-3 right-3 opacity-10 group-hover:opacity-100 transition-opacity">
@@ -385,35 +413,41 @@ const VisualAllocation: React.FC = () => {
                     </div>
                 )}
 
-                {/* BOX FILES VIEW */}
-                {viewMode === 'box_files' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in zoom-in-50 duration-300">
-                        {getFilesForBox(selectedBoxId!).map(file => (
+                {/* BOX FOLDERS VIEW (Tabs) */}
+                {viewMode === 'box_folders' && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-in zoom-in-50 duration-300">
+                        {getFoldersForBox(selectedBoxId!).map(folder => (
                             <div
-                                key={file.id}
-                                onClick={() => handleSelectFile(file)}
-                                className="bg-[#1e293b] border border-slate-700 p-0 rounded-sm cursor-pointer hover:border-blue-400 hover:-translate-y-1 transition-all group shadow-sm"
+                                key={folder.id}
+                                onClick={() => handleSelectFolder(folder.id)}
+                                className="group cursor-pointer relative mt-4"
                             >
-                                <div className="h-2 bg-blue-500/20 w-full" />
-                                <div className="p-4">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <FileText className="h-6 w-6 text-slate-500 group-hover:text-blue-400" />
-                                        <div className={`w-2 h-2 rounded-full ${file.status === 'active' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                {/* Folder Tab */}
+                                <div
+                                    className="absolute -top-3 left-0 w-24 h-5 rounded-t-lg shadow-sm group-hover:-mt-1 transition-all"
+                                    style={{ backgroundColor: folder.color || '#fbbf24' }}
+                                />
+                                {/* Folder Body */}
+                                <div
+                                    className="bg-slate-800 border-t-4 p-4 rounded-b-lg rounded-tr-lg shadow-md h-32 flex flex-col justify-between hover:shadow-lg transition-all border-slate-700"
+                                    style={{ borderTopColor: folder.color || '#fbbf24' }}
+                                >
+                                    <div>
+                                        <h3 className="font-bold text-white truncate text-sm" title={folder.name}>{folder.name}</h3>
+                                        <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-1 rounded">{folder.code}</span>
                                     </div>
-                                    <h4 className="text-blue-400 font-mono text-xs font-bold mb-1">{file.prNumber}</h4>
-                                    <p className="text-slate-300 text-sm line-clamp-2 leading-tight h-10">{file.description}</p>
 
-                                    <div className="mt-4 pt-3 border-t border-slate-700 flex justify-between items-center text-xs text-slate-500">
-                                        <span>{format(new Date(file.dateAdded), 'MMM d')}</span>
-                                        <span className="font-mono">{file.division || '-'}</span>
+                                    <div className="flex justify-between items-end">
+                                        <FolderIcon className="h-8 w-8 text-slate-700" />
+                                        <span className="text-xs font-medium text-slate-300">{getFilesForFolder(folder.id).length} Files</span>
                                     </div>
                                 </div>
                             </div>
                         ))}
-                        {getFilesForBox(selectedBoxId!).length === 0 && (
+                        {getFoldersForBox(selectedBoxId!).length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center text-slate-500 py-20">
-                                <FileText className="h-16 w-16 mb-4 opacity-20" />
-                                <p>No files in this box.</p>
+                                <FolderIcon className="h-16 w-16 mb-4 opacity-20" />
+                                <p>No folders in this box.</p>
                             </div>
                         )}
                     </div>

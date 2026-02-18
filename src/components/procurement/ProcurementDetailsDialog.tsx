@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Procurement } from '@/types/procurement';
 import { format } from 'date-fns';
-import { MapPin, Calendar, FileText, Activity, Layers, Tag, User } from 'lucide-react';
+import { MapPin, Calendar, FileText, Activity, Layers, Tag, User, Loader2 } from 'lucide-react';
 
 interface ProcurementDetailsDialogProps {
     open: boolean;
@@ -38,9 +38,59 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
         }
     };
 
+    const getCurrentStage = (p: Procurement) => {
+        if (p.procurementType === 'SVP') {
+            if (p.forwardedGsdDate) return 'Forwarded GSD for P.O.';
+            if (p.bacResolutionDate) return 'BAC Resolution';
+            if (p.rfqOpeningDate) return 'RFQ Opening';
+            if (p.rfqCanvassDate) return 'RFQ for Canvass';
+            if (p.publishedDate) return 'Published';
+            if (p.prDeliberatedDate) return 'PR Deliberated';
+            if (p.receivedPrDate) return 'Received PR for Action';
+            return 'Not yet Acted';
+        } else {
+            // Regular Bidding - Check in reverse chronological order (latest step first)
+            if (p.awardedToDate) return 'Awarded to Supplier';
+            if (p.forwardedOapiDate) return 'Forwarded to OAPIA';
+            if (p.ntpDate) return 'NTP';
+            if (p.contractDate) return 'Contract Date';
+            if (p.noaDate) return 'NOA';
+            if (p.postQualReportDate) return 'Post-Qualification Report';
+            if (p.postQualDate) return 'Post-Qualification';
+            if (p.bacResolutionDate) return 'BAC Resolution';
+            if (p.bidEvaluationDate) return 'Bid Evaluation Report';
+            if (p.bidOpeningDate) return 'Bid Opening';
+            if (p.preBidDate) return 'Pre-bid';
+            if (p.publishedDate) return 'Published';
+            if (p.prDeliberatedDate) return 'PR Deliberated';
+            if (p.receivedPrDate) return 'Received PR for Action';
+            return 'Not yet Acted';
+        }
+    };
+
+    // Determine Effective Status & Color (Sync with ProcurementList)
+    const pStatus = procurement.procurementStatus || 'Not yet Acted';
+    const currentStage = getCurrentStage(procurement);
+    let effectiveStatus = pStatus;
+
+    // Auto-In Progress Logic
+    if ((effectiveStatus === 'Not yet Acted' || !effectiveStatus) && currentStage !== 'Not yet Acted' && currentStage !== 'Received PR for Action') {
+        effectiveStatus = 'In Progress';
+    }
+
+    let statusColorClass = '';
+    switch (effectiveStatus) {
+        case 'Completed': statusColorClass = 'text-emerald-400'; break;
+        case 'In Progress': statusColorClass = 'text-blue-400'; break;
+        case 'Returned PR to EU': statusColorClass = 'text-purple-400'; break;
+        case 'Failure': statusColorClass = 'text-red-400'; break;
+        case 'Cancelled': statusColorClass = 'text-orange-400'; break;
+        case 'Not yet Acted': default: statusColorClass = 'text-gray-400'; break;
+    }
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl bg-[#0f172a] border-slate-800 text-white max-h-[90vh] overflow-y-auto block p-0">
+            <DialogContent className="max-w-6xl bg-[#0f172a] border-slate-800 text-white max-h-[90vh] overflow-y-auto block p-0">
                 <div className="p-6">
                     <DialogHeader>
                         <div className="flex items-start justify-between">
@@ -80,15 +130,11 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                     </div>
                                 </div>
                                 <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-800">
-                                    <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Progress</label>
+                                    <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Process Status</label>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Activity className="h-4 w-4 text-slate-400" />
-                                        <span className={`font-medium ${procurement.progressStatus === 'Success' ? 'text-emerald-400' :
-                                            procurement.progressStatus === 'Failed' ? 'text-red-400' :
-                                                procurement.progressStatus === 'Cancelled' ? 'text-slate-400' :
-                                                    'text-yellow-400'
-                                            }`}>
-                                            {procurement.progressStatus || 'Pending'}
+                                        <span className={`font-medium ${statusColorClass}`}>
+                                            {effectiveStatus}
                                         </span>
                                     </div>
                                 </div>
@@ -103,6 +149,38 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                 </div>
                             </div>
 
+                            {/* Financial Information */}
+                            {(procurement.abc || procurement.bidAmount || procurement.supplier) && (
+                                <div className="bg-gradient-to-br from-emerald-500/5 to-blue-500/5 border border-emerald-500/20 rounded-lg p-4">
+                                    <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Financial Information
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {procurement.abc && (
+                                            <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-700">
+                                                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-1">ABC (Approved Budget)</label>
+                                                <p className="text-lg font-bold text-emerald-400 font-mono">₱{parseFloat(procurement.abc).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                            </div>
+                                        )}
+                                        {procurement.bidAmount && (
+                                            <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-700">
+                                                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-1">Bid Amount (Contract Price)</label>
+                                                <p className="text-lg font-bold text-blue-400 font-mono">₱{parseFloat(procurement.bidAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                            </div>
+                                        )}
+                                        {procurement.supplier && (
+                                            <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-700">
+                                                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-1">Supplier / Awarded to</label>
+                                                <p className="text-sm font-medium text-slate-200">{procurement.supplier}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Main Details */}
                             <div className="space-y-4">
                                 <div>
@@ -113,19 +191,137 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                 </div>
 
                                 <div>
-                                    <h3 className="text-lg font-semibold border-b border-slate-800 pb-2 mb-3">Timeline</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-sm text-slate-500">Date Added</label>
-                                            <p className="font-mono text-slate-200">{formatDate(procurement.dateAdded)}</p>
+                                    <div className="border-b border-slate-800 pb-2 mb-3">
+                                        <h3 className="text-lg font-semibold">Monitoring Process</h3>
+                                        <p className="text-sm text-slate-400">Key dates and status.</p>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {/* Pre-Procurement */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-6 w-1 bg-blue-500 rounded-full"></div>
+                                                <h4 className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Pre-Procurement</h4>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-slate-500 block">Received PR</label>
+                                                    <p className="font-mono text-sm text-slate-200">{formatDate(procurement.receivedPrDate)}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-slate-500 block">PR Deliberated</label>
+                                                    <p className="font-mono text-sm text-slate-200">{formatDate(procurement.prDeliberatedDate)}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-slate-500 block">Published</label>
+                                                    <p className="font-mono text-sm text-slate-200">{formatDate(procurement.publishedDate)}</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-sm text-slate-500">Procurement Date</label>
-                                            <p className="font-mono text-slate-200">{formatDate(procurement.procurementDate)}</p>
+
+                                        {/* Bidding / Canvass */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-6 w-1 bg-purple-500 rounded-full"></div>
+                                                <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider">
+                                                    {procurement.procurementType === 'Regular Bidding' ? 'Bidding Proper' : 'Canvassing'}
+                                                </h4>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                                {procurement.procurementType === 'Regular Bidding' ? (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Pre-bid Conf</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.preBidDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Bid Opening</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.bidOpeningDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Bid Eval Report</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.bidEvaluationDate)}</p>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">RFQ for Canvass</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.rfqCanvassDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">RFQ Opening</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.rfqOpeningDate)}</p>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-sm text-slate-500">Disposal Date</label>
-                                            <p className="font-mono text-orange-400">{formatDate(procurement.disposalDate)}</p>
+
+                                        {/* Qualification & Award */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-6 w-1 bg-emerald-500 rounded-full"></div>
+                                                <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Qualification & Award</h4>
+                                            </div>
+                                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                                {procurement.procurementType === 'Regular Bidding' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Post-Qual</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.postQualDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Post-Qual Report</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.postQualReportDate)}</p>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                <div className="space-y-1">
+                                                    <label className="text-xs text-slate-500 block">BAC Resolution</label>
+                                                    <p className="font-mono text-sm text-slate-200">{formatDate(procurement.bacResolutionDate)}</p>
+                                                </div>
+
+                                                {procurement.procurementType === 'Regular Bidding' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Notice of Award</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.noaDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Contract Date</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.contractDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">NTP</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.ntpDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">To OAPIA</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.forwardedOapiDate)}</p>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                {procurement.procurementType === 'Regular Bidding' ? (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Awarded Date</label>
+                                                            <p className="font-mono text-sm text-emerald-400 font-semibold">{formatDate(procurement.awardedToDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Supplier</label>
+                                                            <p className="font-medium text-sm text-slate-200">{procurement.supplier || 'N/A'}</p>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        <label className="text-xs text-slate-500 block">To GSD</label>
+                                                        <p className="font-mono text-sm text-slate-200">{formatDate(procurement.forwardedGsdDate)}</p>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { deleteProcurement, updateProcurement, onProcurementsChange, onCabinetsChange, onShelvesChange, onFoldersChange, onDivisionsChange, onBoxesChange } from '@/lib/storage';
@@ -68,13 +73,14 @@ import {
     Eye,
     Activity,
     Calendar as CalendarIcon,
-    Package
+    Package,
+    Loader2,
+    Info
 } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import ProcurementDetailsDialog from '@/components/procurement/ProcurementDetailsDialog';
 import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
@@ -121,13 +127,70 @@ const checklistItems = [
     { key: 'fundsAvailability', label: 'Q. CAF, PR, TOR & APP' },
 ];
 
-const ProcurementList: React.FC = () => {
+// ... imports ...
+
+interface ProcurementListProps {
+    forcedType?: string; // 'Small Value Procurement(SVP)' | 'Regular Bidding' | etc.
+    pageTitle?: string;
+}
+
+const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle }) => {
+    // Helper Functions
+    // Updated Helper to Determine CURRENT Progress Stage (Last Completed Step)
+    const getNextStage = (procurement: Procurement): string => {
+        // 1. Check if "Not yet Acted" (No dates set)
+        // If Status is Failure/Cancelled/Returned, show that instead of next stage? 
+        // User asked for "Progress Values should stick to plain text... and the value should be the next of the current setted date"
+        // But if it's "Completed", what is the next stage? "Completed"?
+        const pStatus = procurement.procurementStatus || 'Not yet Acted';
+
+        if (pStatus === 'Completed') return 'Completed';
+        if (pStatus === 'Failure') return 'Failure';
+        if (pStatus === 'Cancelled') return 'Cancelled';
+        if (pStatus === 'Returned PR to EU') return 'Returned PR to EU';
+
+        const type = procurement.procurementType;
+
+        // Define stages based on type
+        // Regular Bidding
+        if (type === 'Regular Bidding') {
+            if (!procurement.receivedPrDate) return 'Received PR for Action';
+            if (!procurement.prDeliberatedDate) return 'PR Deliberated';
+            if (!procurement.publishedDate) return 'Published';
+            if (!procurement.preBidDate) return 'Pre-bid';
+            if (!procurement.bidOpeningDate) return 'Bid Opening';
+            if (!procurement.bidEvaluationDate) return 'Bid Evaluation Report';
+            if (!procurement.bacResolutionDate) return 'Add BAC Resolution';
+            if (!procurement.postQualDate) return 'Post-Qualification';
+            if (!procurement.postQualReportDate) return 'Post-Qualification Report';
+            if (!procurement.forwardedOapiDate) return 'Forwarded to OAPIA'; // Typo in user prompt "Forwareded"
+            if (!procurement.noaDate) return 'NOA';
+            if (!procurement.contractDate) return 'Contract Date';
+            if (!procurement.ntpDate) return 'NTP';
+            // If NTP is set, maybe it's "Awarded"?
+            return 'Awarded to Supplier';
+        }
+
+        // SVP and others (Default)
+        // SVP Monitoring Process:
+        // Received PR -> PR Deliberated -> Published -> RFQ for Canvass -> RFQ Opening -> BAC Resolution -> Forwarded GSD -> PO
+        if (!procurement.receivedPrDate) return 'Received PR for Action';
+        if (!procurement.prDeliberatedDate) return 'PR Deliberated';
+        if (!procurement.publishedDate) return 'Published';
+        if (!procurement.rfqCanvassDate) return 'RFQ for Canvass';
+        if (!procurement.rfqOpeningDate) return 'RFQ Opening';
+        if (!procurement.bacResolutionDate) return 'BAC Resolution';
+        if (!procurement.forwardedGsdDate) return 'Forwarded GSD for P.O.';
+
+        return 'P.O. Created';
+    };
     const { user } = useAuth();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const folderIdFromUrl = searchParams.get('folderId');
 
     const [procurements, setProcurements] = useState<Procurement[]>([]);
+
     const [isLoading, setIsLoading] = useState(true);
 
     // Location Data - Note: cabinets table stores Shelves (Tier 1), shelves table stores Cabinets (Tier 2)
@@ -146,13 +209,7 @@ const ProcurementList: React.FC = () => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 
-    // Dynamic Edit Form Data
-    const [editAvailableShelves, setEditAvailableShelves] = useState<Shelf[]>([]);
-    const [editAvailableFolders, setEditAvailableFolders] = useState<Folder[]>([]);
 
-    // Cascading Filter Data
-    const [filterAvailableShelves, setFilterAvailableShelves] = useState<Shelf[]>([]);
-    const [filterAvailableFolders, setFilterAvailableFolders] = useState<Folder[]>([]);
 
     // Filters (existing)
     const [filters, setFilters] = useState<ProcurementFilters>({
@@ -167,7 +224,7 @@ const ProcurementList: React.FC = () => {
     });
 
     // New: multi-select status filter state (empty = all)
-    const [progressStatusFilters, setProgressStatusFilters] = useState<string[]>([]);
+
     const [statusFilters, setStatusFilters] = useState<string[]>([]); // Procurement Status (Active/Archived)
 
     // Phase 6 Filters
@@ -181,19 +238,14 @@ const ProcurementList: React.FC = () => {
     const [exportFilters, setExportFilters] = useState<{
         type: string[];
         status: string[];
-        progress: string[];
         division: string;
         dateRange: { from: Date | undefined; to: Date | undefined } | undefined;
     }>({
         type: [],
         status: [],
-        progress: [],
         division: 'all_divisions',
         dateRange: undefined
     });
-
-    // Divisions for PR Number construction
-    // const [divisions, setDivisions] = useState<Division[]>([]); // This line is a duplicate, removed.
 
     // Edit Modal State for PR Number Split
     const [editDivisionId, setEditDivisionId] = useState('');
@@ -206,6 +258,8 @@ const ProcurementList: React.FC = () => {
         return () => unsub();
     }, []);
     const [viewProcurement, setViewProcurement] = useState<Procurement | null>(null);
+    const [isNonProcurement, setIsNonProcurement] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Sorting state
     const [sortField, setSortField] = useState<'name' | 'prNumber' | 'date' | 'stackNumber'>('date');
@@ -220,7 +274,9 @@ const ProcurementList: React.FC = () => {
 
     const itemsPerPage = 15;
 
-    // Stack number calculation helper
+    // --- Helper Functions ---
+
+
     const calculateStackNumbers = (procurements: Procurement[], folderId: string): Map<string, number> => {
         // Get all Available files in this folder, sorted by stackNumber then dateAdded
         const availableInFolder = procurements
@@ -275,6 +331,7 @@ const ProcurementList: React.FC = () => {
         procurement: Procurement;
         borrowedBy: string;
         borrowerDivision: string;
+        borrowedDate?: string;
     } | null>(null);
 
     // Return modal
@@ -301,7 +358,8 @@ const ProcurementList: React.FC = () => {
             setBorrowEditModal({
                 procurement,
                 borrowedBy: procurement.borrowedBy || '',
-                borrowerDivision: procurement.borrowerDivision || ''
+                borrowerDivision: procurement.borrowerDivision || '',
+                borrowedDate: procurement.borrowedDate || new Date().toISOString()
             });
         } else {
             // Going to Available (Archived) - show return modal
@@ -315,28 +373,22 @@ const ProcurementList: React.FC = () => {
     const saveBorrowChanges = async () => {
         if (!borrowEditModal) return;
 
-        const { procurement, borrowedBy, borrowerDivision } = borrowEditModal;
-
-        if (!borrowedBy || !borrowerDivision) {
-            toast.error('Please fill in all required fields');
-            return;
-        }
-
         try {
-            await updateProcurement(procurement.id, {
-                status: 'active',
-                borrowedBy,
-                borrowerDivision,
-                borrowedDate: new Date().toISOString()
+            await updateProcurement(borrowEditModal.procurement.id, {
+                borrowedBy: borrowEditModal.borrowedBy,
+                borrowerDivision: borrowEditModal.borrowerDivision,
+                borrowedDate: borrowEditModal.borrowedDate || new Date().toISOString(),
+                status: 'active'
             });
 
             // Recalculate stack numbers
-            await updateStackNumbersForFolder(procurement.folderId);
+            await updateStackNumbersForFolder(borrowEditModal.procurement.folderId);
 
             setBorrowEditModal(null);
-            toast.success('File marked as borrowed');
+            toast.success('Borrow details updated');
         } catch (error) {
-            toast.error('Failed to update file status');
+            console.error('Failed to update borrow details:', error);
+            toast.error('Failed to update borrow details');
         }
     };
 
@@ -401,6 +453,13 @@ const ProcurementList: React.FC = () => {
         }
     }, [folderIdFromUrl, folders, shelves]);
 
+    // Forced Type Effect
+    useEffect(() => {
+        if (forcedType) {
+            setTypeFilters([forcedType]);
+        }
+    }, [forcedType]);
+
     // Read search parameter from URL and populate search box
     useEffect(() => {
         const searchFromUrl = searchParams.get('search');
@@ -424,6 +483,16 @@ const ProcurementList: React.FC = () => {
         }
     }, [searchParams]);
 
+    // Dynamic Edit Form Data
+    const [editAvailableShelves, setEditAvailableShelves] = useState<Shelf[]>([]);
+    const [editAvailableBoxes, setEditAvailableBoxes] = useState<Box[]>([]);
+    const [editAvailableFolders, setEditAvailableFolders] = useState<Folder[]>([]);
+
+    // Cascading Filter Data
+    const [filterAvailableShelves, setFilterAvailableShelves] = useState<Shelf[]>([]);
+    const [filterAvailableFolders, setFilterAvailableFolders] = useState<Folder[]>([]);
+
+    // Filters (existing)
     // Update edit form cascading dropdowns
     useEffect(() => {
         if (editingProcurement && editingProcurement.cabinetId) {
@@ -433,13 +502,38 @@ const ProcurementList: React.FC = () => {
         }
     }, [editingProcurement?.cabinetId, shelves]);
 
+    // Box filtering
     useEffect(() => {
-        if (editingProcurement && editingProcurement.shelfId) {
-            setEditAvailableFolders(folders.filter(f => f.shelfId === editingProcurement.shelfId));
+        if (editingProcurement) {
+            // If in Box Storage mode (boxId is not null), show all boxes
+            // The user selects a box directly from the list
+            if (editingProcurement.boxId !== null && editingProcurement.boxId !== undefined) {
+                setEditAvailableBoxes(boxes);
+            } else if (editingProcurement.shelfId) {
+                // Legacy/Drawer mode: show boxes in specific shelf (if applicable)
+                setEditAvailableBoxes(boxes.filter(b => b.shelfId === editingProcurement.shelfId));
+            } else {
+                setEditAvailableBoxes([]);
+            }
+        }
+    }, [editingProcurement?.shelfId, editingProcurement?.boxId, boxes]);
+
+    // Folder filtering (Tier 2 -> Tier 4 or Tier 3 -> Tier 4)
+    useEffect(() => {
+        if (editingProcurement) {
+            if (editingProcurement.boxId) {
+                // If Box is selected, show folders in that box
+                setEditAvailableFolders(folders.filter(f => f.boxId === editingProcurement.boxId));
+            } else if (editingProcurement.shelfId) {
+                // If no Box, show folders in Cabinet (legacy/direct)
+                setEditAvailableFolders(folders.filter(f => f.shelfId === editingProcurement.shelfId && !f.boxId));
+            } else {
+                setEditAvailableFolders([]);
+            }
         } else {
             setEditAvailableFolders([]);
         }
-    }, [editingProcurement?.shelfId, folders]);
+    }, [editingProcurement?.shelfId, editingProcurement?.boxId, folders]);
 
     // Update filter cascading dropdowns
     useEffect(() => {
@@ -460,9 +554,10 @@ const ProcurementList: React.FC = () => {
 
     // build status options based on current procurements (fall back to common ones)
     // Filter options
+    // build status options based on current procurements (fall back to common ones)
+    // Filter options
     const statusOptions: ProcurementStatus[] = ['active', 'archived'];
-    const progressStatusOptions = ['Pending', 'Success', 'Failed', 'Cancelled'];
-    const typeOptions = ['Regular Bidding', 'Small Value Procurement(SVP)', 'Attendance Sheets', 'Receipt', 'Others'];
+    const typeOptions = ['Regular Bidding', 'SVP', 'Attendance Sheets', 'Receipt', 'Others'];
 
     const toggleStatusFilter = (status: string) => {
         setStatusFilters(prev => {
@@ -471,12 +566,7 @@ const ProcurementList: React.FC = () => {
         });
     };
 
-    const toggleProgressStatusFilter = (status: string) => {
-        setProgressStatusFilters(prev => {
-            if (prev.includes(status)) return prev.filter(s => s !== status);
-            return [...prev, status];
-        });
-    };
+
 
     const toggleTypeFilter = (type: string) => {
         setTypeFilters(prev => {
@@ -499,9 +589,9 @@ const ProcurementList: React.FC = () => {
 
         // New: multi-select status filtering (empty -> all)
         const matchesStatus = statusFilters.length === 0 || statusFilters.includes(procurement.status);
-        const matchesProgressStatus = progressStatusFilters.length === 0 || progressStatusFilters.includes(procurement.progressStatus || 'Pending');
 
-        const matchesUrgency = !filters.urgencyLevel || filters.urgencyLevel === 'all_urgency' || procurement.urgencyLevel === (filters.urgencyLevel as UrgencyLevel);
+
+        const matchesUrgency = !filters.urgencyLevel || (filters.urgencyLevel as any) === 'all_urgency' || procurement.urgencyLevel === (filters.urgencyLevel as any);
 
         // Phase 6 Filters
         // Division (stored as name in procurement.division)
@@ -520,7 +610,7 @@ const ProcurementList: React.FC = () => {
 
         const matchesBox = !filters.boxId || procurement.boxId === filters.boxId;
 
-        return matchesSearch && matchesCabinet && matchesShelf && matchesFolder && matchesStatus && matchesProgressStatus && matchesUrgency && matchesDivision && matchesType && matchesDate && matchesBox;
+        return matchesSearch && matchesCabinet && matchesShelf && matchesFolder && matchesStatus && matchesUrgency && matchesDivision && matchesType && matchesDate && matchesBox;
     }).sort((a, b) => {
         let comparison = 0;
 
@@ -572,9 +662,7 @@ const ProcurementList: React.FC = () => {
         });
         // clear multi-select status
         setStatusFilters([]);
-        setProgressStatusFilters([]);
-        setStatusFilters([]);
-        setProgressStatusFilters([]);
+
         setFilterDivision('all_divisions');
         setTypeFilters([]);
         setFilterDateRange(undefined);
@@ -609,6 +697,16 @@ const ProcurementList: React.FC = () => {
     };
 
     const handleSaveEdit = async () => {
+        if (!editingProcurement) return;
+        setIsSaving(true);
+        try {
+            await handleUpdateProcurement();
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleUpdateProcurement = async () => {
         if (!editingProcurement) return;
 
         // Reconstruct PR Number from split fields
@@ -674,7 +772,7 @@ const ProcurementList: React.FC = () => {
 
         // Find prev and next items around the insertion point
         // Indices are 0-based. Stack numbers are 1-based.
-        // To be at Stack X, we insert at index X-1.
+        // no opbe at Stack X, we insert at index X-1.
         // Prev item is at index X-2. Next item is at index X-1.
 
         let newOrderDate: number;
@@ -718,19 +816,73 @@ const ProcurementList: React.FC = () => {
     // Status change handlers
 
 
-
-
-    // Updated to show: Shelf-Cabinet-Folder (S1-C1-F1)
-    const getLocationString = (p: Procurement) => {
-        const shelf = cabinets.find(c => c.id === p.cabinetId)?.code || '?'; // cabinetId points to Shelf (Tier 1)
-        const cabinet = shelves.find(s => s.id === p.shelfId)?.code || '?'; // shelfId points to Cabinet (Tier 2)
-        const folder = folders.find(f => f.id === p.folderId)?.code || '?'; // folderId points to Folder (Tier 3)
-        const box = boxes.find(b => b.id === p.boxId)?.code || '?'; // boxId points to Box
-
-        if (p.boxId) {
-            return box; // Show only box code (e.g., "B1")
+    // Helper to Determine CURRENT Progress Stage (Last Completed Step)
+    const getCurrentStage = (p: Procurement) => {
+        if (p.procurementType === 'SVP') {
+            if (p.forwardedGsdDate) return 'Forwarded GSD for P.O.';
+            if (p.bacResolutionDate) return 'BAC Resolution';
+            if (p.rfqOpeningDate) return 'RFQ Opening';
+            if (p.rfqCanvassDate) return 'RFQ for Canvass';
+            if (p.publishedDate) return 'Published';
+            if (p.prDeliberatedDate) return 'PR Deliberated';
+            if (p.receivedPrDate) return 'Received PR for Action';
+            return 'Not yet Acted';
         } else {
-            return `${shelf}-${cabinet}-${folder}`;
+            // Regular Bidding - Check in reverse chronological order (latest step first)
+            if (p.awardedToDate) return 'Awarded to Supplier';
+            if (p.forwardedOapiDate) return 'Forwarded to OAPIA';
+            if (p.ntpDate) return 'NTP';
+            if (p.contractDate) return 'Contract Date';
+            if (p.noaDate) return 'NOA';
+            if (p.postQualReportDate) return 'Post-Qualification Report';
+            if (p.postQualDate) return 'Post-Qualification';
+            if (p.bacResolutionDate) return 'BAC Resolution';
+            if (p.bidEvaluationDate) return 'Bid Evaluation Report';
+            if (p.bidOpeningDate) return 'Bid Opening';
+            if (p.preBidDate) return 'Pre-bid';
+            if (p.publishedDate) return 'Published';
+            if (p.prDeliberatedDate) return 'PR Deliberated';
+            if (p.receivedPrDate) return 'Received PR for Action';
+            return 'Not yet Acted';
+        }
+    };
+
+    // Helper to get Latest Activity Date
+    const getLatestActionDate = (p: Procurement) => {
+        const dates = [
+            p.receivedPrDate, p.prDeliberatedDate, p.publishedDate, p.preBidDate, p.bidOpeningDate,
+            p.bidEvaluationDate, p.bacResolutionDate, p.postQualDate, p.postQualReportDate,
+            p.forwardedOapiDate, p.noaDate, p.contractDate, p.ntpDate, p.forwardedGsdDate,
+            p.rfqCanvassDate, p.rfqOpeningDate, p.dateAdded, p.createdAt
+        ].filter(d => d).map(d => new Date(d!));
+
+        if (dates.length === 0) return null;
+        return new Date(Math.max.apply(null, dates.map(d => d.getTime())));
+    };
+
+    // Updated to show: Shelf-Cabinet-Folder (Legacy) OR Box-Folder (New)
+    const getLocationString = (p: Procurement) => {
+        if (p.boxId) {
+            // Box Storage Mode: B{code}-{Fcode} (e.g., B1-F1)
+            const box = boxes.find(b => b.id === p.boxId);
+            const folder = folders.find(f => f.id === p.folderId);
+
+            const boxCode = box ? box.code : '?';
+            const folderCode = folder ? folder.code : '?';
+
+            return `${boxCode}-${folderCode}`;
+        } else {
+            // Drawer Storage Mode: D{code}-{Ccode}-{Fcode}
+            const drawer = cabinets.find(c => c.id === p.cabinetId);
+            const cabinet = shelves.find(s => s.id === p.shelfId);
+            const folder = folders.find(f => f.id === p.folderId);
+
+            const drawerCode = drawer ? drawer.code : '?';
+            const cabinetCode = cabinet ? cabinet.code : '?';
+            const folderCode = folder ? folder.code : '?';
+
+            // Use simplified format if possible, but keep Drawer-Cabinet-Folder for now as requested default
+            return `${drawerCode}-${cabinetCode}-${folderCode}`;
         }
     };
 
@@ -739,7 +891,7 @@ const ProcurementList: React.FC = () => {
         setExportFilters({
             type: [...typeFilters],
             status: [...statusFilters],
-            progress: [...progressStatusFilters],
+            progress: [...procurementStatusFilters],
             division: filterDivision,
             dateRange: filterDateRange
         });
@@ -756,7 +908,7 @@ const ProcurementList: React.FC = () => {
             const matchesStatus = exportFilters.status.length === 0 || exportFilters.status.includes(procurement.status);
 
             // Progress Filter
-            const matchesProgress = exportFilters.progress.length === 0 || exportFilters.progress.includes(procurement.progressStatus || 'Pending');
+            const matchesProgress = exportFilters.progress.length === 0 || exportFilters.progress.includes(procurement.procurementStatus || 'Pending');
 
             // Division Filter
             const matchesDivision = !exportFilters.division || exportFilters.division === 'all_divisions' || procurement.division === exportFilters.division;
@@ -772,14 +924,14 @@ const ProcurementList: React.FC = () => {
             const checklist = p.checklist || {};
 
             return {
-                'PR Number': p.prNumber,
+                'PR Number/IB Number': p.prNumber,
                 'Procurement Type': p.procurementType || '',
                 'Project Name': p.projectName || '',
                 'Description': p.description,
                 'Division': p.division || '',
                 'Location': getLocationString(p),
                 'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
-                'Progress Status': p.progressStatus || 'Pending',
+                'Progress Status': p.procurementStatus || 'Pending',
                 'Stack Number': p.stackNumber || '',
                 'Borrowed By': p.borrowedBy || '',
                 'Borrower Division': p.borrowerDivision || '',
@@ -944,11 +1096,51 @@ const ProcurementList: React.FC = () => {
         }
     };
 
+
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Records</h1>
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-3xl font-bold text-white">{pageTitle || "Records"}</h1>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-800">
+                                    <Info className="h-5 w-5 text-slate-400 hover:text-blue-400" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 bg-[#1e293b] border-slate-700 p-4 shadow-xl" align="start">
+                                <h4 className="font-semibold text-white mb-3 text-sm border-b border-slate-700 pb-2">Status Legend</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Completed</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">In Progress</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Returned PR to EU</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-gray-500 shadow-[0_0_8px_rgba(100,116,139,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Not yet Acted</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Failure</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Cancelled</span>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
 
                     <p className="text-slate-400 mt-1">View and manage file tracking records</p>
                 </div>
@@ -1052,10 +1244,10 @@ const ProcurementList: React.FC = () => {
                                     onValueChange={(val) => setFilters(prev => ({ ...prev, cabinetId: val === "all" ? "" : val, shelfId: "", folderId: "", boxId: "" }))} // Clear box if shelf selected
                                 >
                                     <SelectTrigger className="w-full border-none bg-transparent text-white focus:ring-0 h-6 text-xs">
-                                        <SelectValue placeholder="All Shelves" />
+                                        <SelectValue placeholder="All Drawers" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                        <SelectItem value="all">All Shelves</SelectItem>
+                                        <SelectItem value="all">All Drawers</SelectItem>
                                         {cabinets.map((c) => (
                                             <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
                                         ))}
@@ -1146,45 +1338,7 @@ const ProcurementList: React.FC = () => {
                                 </DropdownMenu>
                             </div>
 
-                            {/* PROGRESS STATUS multi-select dropdown */}
-                            <div className="flex-1 min-w-[120px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" className="w-full flex justify-between items-center text-white px-3 py-1 h-6 text-xs">
-                                            <div className="flex items-center gap-2">
-                                                <span>Progress</span>
-                                                {progressStatusFilters.length > 0 && (
-                                                    <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-blue-600 text-white text-[10px] font-medium">
-                                                        {progressStatusFilters.length}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <ChevronDown className="h-4 w-4 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="start" className="bg-[#1e293b] border-slate-700 text-white p-3 w-56">
-                                        <div className="mb-2 text-slate-300 text-sm">Select progress</div>
-                                        <div className="flex flex-col gap-2 max-h-48 overflow-auto">
-                                            {progressStatusOptions.map((status) => (
-                                                <div key={status} className="flex items-center gap-2">
-                                                    <Checkbox
-                                                        checked={progressStatusFilters.includes(status)}
-                                                        onCheckedChange={() => toggleProgressStatusFilter(status)}
-                                                        className="border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleProgressStatusFilter(status)}
-                                                        className="text-sm text-slate-200 text-left w-full"
-                                                    >
-                                                        {status}
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
+
 
                             {/* Division Filter */}
                             <div className="flex-1 min-w-[150px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
@@ -1204,45 +1358,47 @@ const ProcurementList: React.FC = () => {
                                 </Select>
                             </div>
 
-                            {/* Type Filter (Multi-select) */}
-                            <div className="flex-1 min-w-[120px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" className="w-full flex justify-between items-center text-white px-3 py-1 h-6 text-xs">
-                                            <div className="flex items-center gap-2">
-                                                <span>Type</span>
-                                                {typeFilters.length > 0 && (
-                                                    <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-purple-600 text-white text-[10px] font-medium">
-                                                        {typeFilters.length}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <ChevronDown className="h-4 w-4 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="start" className="bg-[#1e293b] border-slate-700 text-white p-3 w-56">
-                                        <div className="mb-2 text-slate-300 text-sm">Select type</div>
-                                        <div className="flex flex-col gap-2 max-h-48 overflow-auto">
-                                            {typeOptions.map((type) => (
-                                                <div key={type} className="flex items-center gap-2">
-                                                    <Checkbox
-                                                        checked={typeFilters.includes(type)}
-                                                        onCheckedChange={() => toggleTypeFilter(type)}
-                                                        className="border-slate-500 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => toggleTypeFilter(type)}
-                                                        className="text-sm text-slate-200 text-left w-full"
-                                                    >
-                                                        {type}
-                                                    </button>
+                            {/* Type Filter (Multi-select) - OR specific column toggles? */}
+                            {!forcedType && (
+                                <div className="flex-1 min-w-[120px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" className="w-full flex justify-between items-center text-white px-3 py-1 h-6 text-xs">
+                                                <div className="flex items-center gap-2">
+                                                    <span>Type</span>
+                                                    {typeFilters.length > 0 && (
+                                                        <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-purple-600 text-white text-[10px] font-medium">
+                                                            {typeFilters.length}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
+                                                <ChevronDown className="h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="bg-[#1e293b] border-slate-700 text-white p-3 w-56">
+                                            <div className="mb-2 text-slate-300 text-sm">Select type</div>
+                                            <div className="flex flex-col gap-2 max-h-48 overflow-auto">
+                                                {typeOptions.map((type) => (
+                                                    <div key={type} className="flex items-center gap-2">
+                                                        <Checkbox
+                                                            checked={typeFilters.includes(type)}
+                                                            onCheckedChange={() => toggleTypeFilter(type)}
+                                                            className="border-slate-500 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleTypeFilter(type)}
+                                                            className="text-sm text-slate-200 text-left w-full"
+                                                        >
+                                                            {type}
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            )}
 
                             {/* SORT controls */}
                             <div className="flex-none flex items-center gap-2 bg-[#1e293b] rounded-md border border-slate-700 p-1">
@@ -1292,17 +1448,17 @@ const ProcurementList: React.FC = () => {
                                             className="border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                                         />
                                     </TableHead>
-                                    <TableHead className="text-slate-300 w-[150px]">PR Number</TableHead>
-                                    <TableHead className="text-slate-300">Project Title</TableHead>
-                                    <TableHead className="text-slate-300">Division</TableHead>
-                                    <TableHead className="text-slate-300">Type</TableHead>
-                                    <TableHead className="text-slate-300 w-[130px]">Location</TableHead>
-                                    <TableHead className="text-center text-slate-300 w-[80px]">Stack #</TableHead>
-                                    <TableHead className="text-slate-300">Storage Unit</TableHead>
-                                    <TableHead className="text-slate-300">Progress</TableHead>
-                                    <TableHead className="text-slate-300">Status</TableHead>
-                                    <TableHead className="text-slate-300">Procurement Date</TableHead>
-                                    <TableHead className="text-right text-slate-300">Actions</TableHead>
+                                    <TableHead className="text-slate-300 w-[100px]">{forcedType === 'Regular Bidding' ? 'IB Number' : 'PR Number'}</TableHead>
+                                    <TableHead className="text-slate-300">Project Title (Particulars)</TableHead>
+                                    {forcedType === 'Regular Bidding' && <TableHead className="text-slate-300">ABC</TableHead>}
+                                    <TableHead className="text-slate-300 w-[90px]">End User</TableHead>
+                                    {!forcedType && <TableHead className="text-slate-300 w-[100px]">Type</TableHead>}
+                                    <TableHead className="text-slate-300 w-[100px]">Location</TableHead>
+                                    <TableHead className="text-center text-slate-300 w-[70px]">Stack #</TableHead>
+                                    <TableHead className="text-slate-300 w-[120px]">Current Progress</TableHead>
+                                    <TableHead className="text-slate-300 w-[110px]">Status</TableHead>
+                                    <TableHead className="text-slate-300 w-[120px]">Date Progress Updated</TableHead>
+                                    <TableHead className="text-right text-slate-300 w-[140px]">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1313,108 +1469,209 @@ const ProcurementList: React.FC = () => {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    paginatedProcurements.map((procurement) => (
-                                        <TableRow key={procurement.id} className="border-slate-800 hover:bg-[#1e293b]">
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedIds.includes(procurement.id)}
-                                                    onCheckedChange={(checked) => handleSelectOne(procurement.id, checked as boolean)}
-                                                    className="border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                                />
-                                            </TableCell>
-                                            <TableCell className="font-medium text-white">
-                                                {procurement.procurementType === 'Attendance Sheets' ? 'N/A' : procurement.prNumber}
-                                            </TableCell>
-                                            <TableCell className="max-w-[150px] truncate text-slate-400" title={procurement.projectName || ''}>
-                                                {procurement.projectName || '-'}
-                                            </TableCell>
-                                            <TableCell className="max-w-[150px] truncate text-slate-300" title={procurement.division || ''}>
-                                                {procurement.division || '-'}
-                                            </TableCell>
-                                            <TableCell className="text-slate-300">
-                                                {procurement.procurementType === 'Regular Bidding' ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                                                        Regular Bidding
-                                                    </span>
-                                                ) : procurement.procurementType === 'Small Value Procurement(SVP)' ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                                        Small Value Procurement(SVP)
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
-                                                        {procurement.procurementType || '-'}
-                                                    </span>
+                                    paginatedProcurements.map((procurement) => {
+                                        const pStatus = procurement.procurementStatus || 'Not yet Acted';
+
+                                        // Current Stage (Last Completed Step)
+                                        const getLastStage = (p: Procurement) => {
+                                            if (p.procurementType === 'SVP') {
+                                                if (p.forwardedGsdDate) return 'Forwarded GSD for P.O.';
+                                                if (p.bacResolutionDate) return 'BAC Resolution';
+                                                if (p.rfqOpeningDate) return 'RFQ Opening';
+                                                if (p.rfqCanvassDate) return 'RFQ for Canvass';
+                                                if (p.publishedDate) return 'Published';
+                                                if (p.prDeliberatedDate) return 'PR Deliberated';
+                                                if (p.receivedPrDate) return 'Received PR for Action';
+                                                return 'Not yet Acted';
+                                            } else {
+                                                // Regular Bidding - Check in reverse chronological order (latest first)
+                                                if (p.awardedToDate) return 'Awarded to Supplier';
+                                                if (p.forwardedOapiDate) return 'To OAPIA';
+                                                if (p.ntpDate) return 'NTP';
+                                                if (p.contractDate) return 'Contract Date';
+                                                if (p.noaDate) return 'NOA';
+                                                if (p.postQualReportDate) return 'Post-Qual Report';
+                                                if (p.postQualDate) return 'Post-Qual';
+                                                if (p.bacResolutionDate) return 'BAC Resolution';
+                                                if (p.bidEvaluationDate) return 'Bid Eval Report';
+                                                if (p.bidOpeningDate) return 'Bid Opening';
+                                                if (p.preBidDate) return 'Pre-bid';
+                                                if (p.publishedDate) return 'Published';
+                                                if (p.prDeliberatedDate) return 'PR Deliberated';
+                                                if (p.receivedPrDate) return 'Received PR for Action';
+                                                return 'Not yet Acted';
+                                            }
+                                        };
+                                        const currentStage = getLastStage(procurement);
+
+                                        // Determine Effective Status for Coloring
+                                        // User logic: "Completed(Green), In Progress(Blue), Returned PR to EU(Purple), Not yet Acted(Gray), Failure(Red), Cancelled(Red Orange)"
+                                        let effectiveStatus = pStatus || 'Not yet Acted';
+
+                                        // Auto-detect 'In Progress' if marked 'Not yet Acted' but has updates
+                                        if (effectiveStatus === 'Not yet Acted') {
+                                            // Check if any progress monitoring dates are set
+                                            const hasProgress = [
+                                                procurement.receivedPrDate,
+                                                procurement.prDeliberatedDate,
+                                                procurement.publishedDate,
+                                                procurement.preBidDate,
+                                                procurement.bidOpeningDate,
+                                                procurement.bidEvaluationDate,
+                                                procurement.bacResolutionDate,
+                                                procurement.postQualDate,
+                                                procurement.postQualReportDate,
+                                                procurement.forwardedOapiDate,
+                                                procurement.noaDate,
+                                                procurement.contractDate,
+                                                procurement.ntpDate,
+                                                procurement.rfqCanvassDate,
+                                                procurement.rfqOpeningDate,
+                                                procurement.forwardedGsdDate
+                                            ].some(d => !!d);
+
+                                            if (hasProgress) {
+                                                effectiveStatus = 'In Progress';
+                                            }
+                                        }
+
+                                        // If status is Pending (legacy), treat as In Progress
+                                        if (pStatus === 'Pending') effectiveStatus = 'In Progress';
+
+                                        // Row Background & Border Classes
+                                        let bgClass = '';
+                                        let borderClass = '';
+                                        let textStatusClass = '';
+
+                                        // Pure vivid colors: Completed=Green, In Progress=Yellow, Returned PR=Purple, Failure=Red, Cancelled=Orange, Not yet Acted=Gray
+                                        switch (effectiveStatus) {
+                                            case 'Completed':
+                                            case 'Success': // Legacy
+                                                bgClass = 'bg-green-500/25 hover:bg-green-500/35';
+                                                borderClass = 'border-l-4 border-l-green-500';
+                                                textStatusClass = 'text-green-400 font-semibold';
+                                                break;
+                                            case 'In Progress':
+                                                bgClass = 'bg-yellow-400/20 hover:bg-yellow-400/30';
+                                                borderClass = 'border-l-4 border-l-yellow-400';
+                                                textStatusClass = 'text-yellow-400 font-semibold';
+                                                break;
+                                            case 'Returned PR to EU':
+                                            case 'Return PR to EU' as any:
+                                                bgClass = 'bg-purple-500/25 hover:bg-purple-500/35';
+                                                borderClass = 'border-l-4 border-l-purple-500';
+                                                textStatusClass = 'text-purple-400 font-semibold';
+                                                break;
+                                            case 'Failure':
+                                            case 'Failed': // Legacy
+                                                bgClass = 'bg-red-500/25 hover:bg-red-500/35';
+                                                borderClass = 'border-l-4 border-l-red-500';
+                                                textStatusClass = 'text-red-400 font-semibold';
+                                                break;
+                                            case 'Cancelled':
+                                                bgClass = 'bg-orange-500/25 hover:bg-orange-500/35';
+                                                borderClass = 'border-l-4 border-l-orange-500';
+                                                textStatusClass = 'text-orange-400 font-semibold';
+                                                break;
+                                            case 'Not yet Acted':
+                                            default:
+                                                bgClass = 'bg-slate-500/10 hover:bg-slate-500/20';
+                                                borderClass = 'border-l-4 border-l-slate-500';
+                                                textStatusClass = 'text-slate-400';
+                                                break;
+                                        }
+
+                                        // Find Division Acronym
+                                        const div = divisions.find(d => d.name === procurement.division);
+                                        const divAcronym = div ? div.abbreviation : (procurement.division || '-');
+
+                                        return (
+                                            <TableRow key={procurement.id} className={`border-slate-800 transition-colors ${bgClass}`}>
+                                                <TableCell className={`${borderClass}`}>
+                                                    <Checkbox
+                                                        checked={selectedIds.includes(procurement.id)}
+                                                        onCheckedChange={(checked) => handleSelectOne(procurement.id, checked as boolean)}
+                                                        className="border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="font-medium text-white text-xs w-[140px]">
+                                                    {procurement.prNumber}
+                                                </TableCell>
+                                                <TableCell className="max-w-[250px] truncate text-slate-300 font-medium" title={procurement.projectName || ''}>
+                                                    {procurement.projectName || '-'}
+                                                    <div className="text-[10px] text-slate-500 italic truncate">{procurement.description}</div>
+                                                </TableCell>
+                                                {forcedType === 'Regular Bidding' && (
+                                                    <TableCell className="text-slate-300">
+                                                        {procurement.abc ? `₱${procurement.abc.toLocaleString()}` : '-'}
+                                                    </TableCell>
                                                 )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2 text-slate-300">
-                                                    <MapPin className="h-3 w-3 text-blue-500" />
-                                                    <span className="font-mono text-xs bg-slate-800 px-2 py-1 rounded">
-                                                        {getLocationString(procurement)}
-                                                    </span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <span className="text-slate-400 text-sm font-mono">
-                                                    {procurement.stackNumber ? `↕${procurement.stackNumber}` : '-'}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                {procurement.boxId ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <Package className="h-4 w-4 text-orange-400" />
-                                                        <span className="text-slate-400 text-sm font-mono">
-                                                            {boxes.find(b => b.id === procurement.boxId)?.code || 'BOX'}
+                                                <TableCell className="text-slate-300 text-xs" title={procurement.division || ''}>
+                                                    {divAcronym}
+                                                </TableCell>
+                                                {!forcedType && (
+                                                    <TableCell className="text-slate-300">
+                                                        {procurement.procurementType === 'Regular Bidding' ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                                                Regular
+                                                            </span>
+                                                        ) : procurement.procurementType === 'SVP' ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                                                SVP
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                                                {procurement.procurementType || '-'}
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                )}
+                                                <TableCell>
+                                                    <div className="flex items-center gap-1 text-slate-300">
+                                                        <span className="font-mono text-xs bg-slate-800/50 px-1.5 py-0.5 rounded border border-slate-700/50">
+                                                            {getLocationString(procurement)}
                                                         </span>
                                                     </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        <div
-                                                            className="h-4 w-4 rounded-full border border-slate-600 flex-shrink-0"
-                                                            style={{
-                                                                backgroundColor: folders.find(f => f.id === procurement.folderId)?.color || '#FF6B6B'
-                                                            }}
-                                                        />
-                                                        <span className="text-slate-400 text-sm font-mono">
-                                                            {folders.find(f => f.id === procurement.folderId)?.code || '-'}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${procurement.progressStatus === 'Success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                    procurement.progressStatus === 'Failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                        procurement.progressStatus === 'Cancelled' ? 'bg-slate-500/10 text-slate-400 border border-slate-500/20' :
-                                                            'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
-                                                    }`}>
-                                                    {procurement.progressStatus || 'Pending'}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Select
-                                                    value={procurement.status}
-                                                    onValueChange={(value) => handleStatusChange(procurement, value as ProcurementStatus)}
-                                                >
-                                                    <SelectTrigger className={`w-[130px] border ${procurement.status === 'active'
-                                                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                                                        : 'bg-slate-700/50 text-slate-300 border-slate-700'
-                                                        }`}>
-                                                        <SelectValue>
-                                                            {procurement.status === 'active' ? 'Borrowed' : 'Archived'}
-                                                        </SelectValue>
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                        <SelectItem value="active" className="text-orange-400 focus:text-orange-400">Borrowed</SelectItem>
-                                                        <SelectItem value="archived" className="text-slate-300 focus:text-white">Archived</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </TableCell>
-                                            <TableCell className="text-slate-400">
-                                                {procurement.procurementDate ? format(new Date(procurement.procurementDate), 'MMM d, yyyy') : '-'}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    {/* {isFolderView && (
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <span className="text-slate-400 text-xs font-mono">
+                                                        {procurement.stackNumber ? `${procurement.stackNumber}` : '-'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="text-xs font-medium">
+                                                    {/* "Current Progress" shows the NEXT stage/step */}
+                                                    <span className={`${textStatusClass}`} title={`Status: ${effectiveStatus}`}>
+                                                        {currentStage}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Select
+                                                        value={procurement.status}
+                                                        onValueChange={(value) => handleStatusChange(procurement, value as ProcurementStatus)}
+                                                    >
+                                                        <SelectTrigger className={`w-[110px] h-7 text-xs border ${procurement.status === 'active'
+                                                            ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                                            : 'bg-slate-700/50 text-slate-300 border-slate-700'
+                                                            }`}>
+                                                            <SelectValue>
+                                                                {procurement.status === 'active' ? 'Borrowed' : 'In Storage'}
+                                                            </SelectValue>
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                            <SelectItem value="active" className="text-orange-400 focus:text-orange-400 text-xs">Borrowed</SelectItem>
+                                                            <SelectItem value="archived" className="text-slate-300 focus:text-white text-xs">In Storage</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                                <TableCell className="text-slate-400">
+                                                    {(() => {
+                                                        const latest = getLatestActionDate(procurement);
+                                                        return latest ? format(latest, 'MMM d, yyyy') : '-';
+                                                    })()}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        {/* {isFolderView && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -1425,62 +1682,117 @@ const ProcurementList: React.FC = () => {
                                                             <ArrowUp className="h-4 w-4" />
                                                         </Button>
                                                     )} */}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => setViewProcurement(procurement)}
-                                                        className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-700/50"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleEdit(procurement)}
-                                                        className="h-8 w-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
-                                                        title="Edit Details"
-                                                    >
-                                                        <Pencil className="h-4 w-4" />
-                                                    </Button>
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => setDeleteId(procurement.id)}
-                                                                className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10"
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent className="bg-[#1e293b] border-slate-800 text-white">
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Delete Record?</AlertDialogTitle>
-                                                                <AlertDialogDescription className="text-slate-400">
-                                                                    This action cannot be undone. This will permanently delete the procurement record.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel className="bg-transparent border-slate-700 text-white hover:bg-slate-800">Cancel</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => navigate(`/procurement/progress?search=${encodeURIComponent(procurement.prNumber)}`)}
+                                                            className="h-8 w-8 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+                                                            title="View Progress Tracking"
+                                                        >
+                                                            <Activity className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => setViewProcurement(procurement)}
+                                                            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-700/50"
+                                                            title="View Details"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => handleEdit(procurement)}
+                                                            className="h-8 w-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
+                                                            title="Edit Details"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                        <AlertDialog>
+                                                            <AlertDialogTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => setDeleteId(procurement.id)}
+                                                                    className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </AlertDialogTrigger>
+                                                            <AlertDialogContent className="bg-[#1e293b] border-slate-800 text-white">
+                                                                <AlertDialogHeader>
+                                                                    <AlertDialogTitle>Delete Record?</AlertDialogTitle>
+                                                                    <AlertDialogDescription className="text-slate-400">
+                                                                        This action cannot be undone. This will permanently delete the procurement record.
+                                                                    </AlertDialogDescription>
+                                                                </AlertDialogHeader>
+                                                                <AlertDialogFooter>
+                                                                    <AlertDialogCancel className="bg-transparent border-slate-700 text-white hover:bg-slate-800">Cancel</AlertDialogCancel>
+                                                                    <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
+                                                                </AlertDialogFooter>
+                                                            </AlertDialogContent>
+                                                        </AlertDialog>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
+                    </div>
+
+                    {/* Legend Card - Floating Bottom Right */}
+                    {/* Legend Popover - Fixed Bottom Right */}
+                    <div className="fixed bottom-6 right-6 z-50">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-10 w-10 rounded-full bg-[#1e293b] border-slate-700 shadow-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all hover:scale-105"
+                                >
+                                    <Info className="h-5 w-5" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 bg-[#1e293b] border-slate-700 p-4 shadow-xl mb-2 mr-2" align="end" side="top">
+                                <h4 className="font-semibold text-white mb-3 text-sm border-b border-slate-700 pb-2">Status Legend</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Completed</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">In Progress</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Returned PR to EU</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-slate-500 shadow-[0_0_8px_rgba(100,116,139,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Not yet Acted</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Failure</span>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-3 h-3 rounded-full bg-orange-600 shadow-[0_0_8px_rgba(234,88,12,0.5)]"></div>
+                                        <span className="text-xs text-slate-300">Cancelled</span>
+                                    </div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 </CardContent>
                 {totalPages > 1 && (
                     <div className="p-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="text-sm text-slate-400">
                             Showing {paginatedProcurements.length} of {filteredProcurements.length} records
-                            <span className="mx-2">•</span>
+                            <span className="mx-2">â€¢</span>
                             Page {currentPage} of {totalPages}
                         </div>
 
@@ -1536,7 +1848,7 @@ const ProcurementList: React.FC = () => {
 
             {/* Edit Dialog - Fixed Layout */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="border-slate-800 bg-[#0f172a] text-white max-w-2xl max-h-[90vh] flex flex-col p-0">
+                <DialogContent className="border-slate-800 bg-[#0f172a] text-white max-w-7xl max-h-[90vh] flex flex-col p-0">
                     <DialogHeader className="p-6 pb-2">
                         <DialogTitle>Edit Record</DialogTitle>
                         <DialogDescription className="text-slate-400">
@@ -1544,7 +1856,7 @@ const ProcurementList: React.FC = () => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    {editingProcurement && (
+                    {editingProcurement && (<>
                         <div className="flex-1 overflow-y-auto p-6 pt-2">
                             <div className="grid gap-6">
                                 <div className="grid grid-cols-2 gap-4">
@@ -1631,14 +1943,20 @@ const ProcurementList: React.FC = () => {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label className="text-slate-300">Division</Label>
-                                        <Input
+                                        <Label className="text-slate-300">End User (Division)</Label>
+                                        <Select
                                             value={editingProcurement.division || ''}
-                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, division: e.target.value })}
-                                            className="bg-[#1e293b] border-slate-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                            placeholder="Enter division"
-                                            disabled={editingProcurement.status === 'archived'}
-                                        />
+                                            onValueChange={(val) => setEditingProcurement({ ...editingProcurement, division: val })}
+                                        >
+                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectValue placeholder="Select Division" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
+                                                {divisions.sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
+                                                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
 
@@ -1658,23 +1976,23 @@ const ProcurementList: React.FC = () => {
                                         <div className="space-y-2">
                                             <Label className="text-slate-300">Procurement Type</Label>
                                             <Select
-                                                value={editingProcurement.procurementType || 'Regular Bidding'}
-                                                onValueChange={(value) => setEditingProcurement({ ...editingProcurement, procurementType: value })}
+                                                value={(editingProcurement.procurementType || 'Regular Bidding') as any}
+                                                onValueChange={(value) => setEditingProcurement({ ...editingProcurement, procurementType: value as any })}
                                             >
                                                 <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                    {['Regular Bidding', 'Small Value Procurement(SVP)', 'Receipt', 'Official Receipt'].includes(editingProcurement.procurementType || 'Regular Bidding') ? (
+                                                    {['Regular Bidding', 'SVP', 'Receipt', 'Official Receipt'].includes(editingProcurement.procurementType || 'Regular Bidding') ? (
                                                         <>
                                                             <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                                            <SelectItem value="Small Value Procurement(SVP)">Small Value Procurement (SVP)</SelectItem>
+                                                            <SelectItem value="SVP">Small Value Procurement (SVP)</SelectItem>
                                                             <SelectItem value="Receipt">Receipt</SelectItem>
                                                         </>
                                                     ) : (
                                                         <>
                                                             <SelectItem value="Regular Bidding">Regular Bidding</SelectItem>
-                                                            <SelectItem value="Small Value Procurement(SVP)">Small Value Procurement (SVP)</SelectItem>
+                                                            <SelectItem value="SVP">Small Value Procurement (SVP)</SelectItem>
                                                             <SelectItem value="Shopping">Shopping</SelectItem>
                                                             <SelectItem value="Direct Contracting">Direct Contracting</SelectItem>
                                                             <SelectItem value="Negotiated Procurement">Negotiated Procurement</SelectItem>
@@ -1689,23 +2007,468 @@ const ProcurementList: React.FC = () => {
                                     )}
 
                                     <div className="space-y-2 mb-5">
-                                        <Label className="text-slate-300">Progress Status</Label>
+                                        <Label className="text-slate-300">Process Status</Label>
                                         <Select
-                                            value={editingProcurement.progressStatus || 'Pending'}
-                                            onValueChange={(value) => setEditingProcurement({ ...editingProcurement, progressStatus: value as 'Pending' | 'Success' | 'Failed' })}
+                                            value={editingProcurement.procurementStatus || 'Not yet Acted'}
+                                            onValueChange={(value) => setEditingProcurement({ ...editingProcurement, procurementStatus: value })}
                                         >
                                             <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectItem value="Pending" className="text-yellow-400">Pending</SelectItem>
-                                                <SelectItem value="Success" className="text-emerald-400">Success</SelectItem>
-                                                <SelectItem value="Failed" className="text-red-400">Failed</SelectItem>
-                                                <SelectItem value="Cancelled" className="text-slate-400">Cancelled</SelectItem>
+                                                <SelectItem value="Completed">Completed</SelectItem>
+                                                <SelectItem value="In Progress">In Progress</SelectItem>
+                                                <SelectItem value="Returned PR to EU">Returned PR to EU</SelectItem>
+                                                <SelectItem value="Not yet Acted">Not yet Acted</SelectItem>
+                                                <SelectItem value="Failure">Failure</SelectItem>
+                                                <SelectItem value="Cancelled">Cancelled</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                </div >
+
+                                    {/* Financial Information */}
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label className="text-slate-300">ABC (Approved Budget for Contract)</Label>
+                                            <Input
+                                                type="text"
+                                                value={editingProcurement.abc ? parseFloat(String(editingProcurement.abc)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/,/g, '');
+                                                    if (value === '' || !isNaN(parseFloat(value))) {
+                                                        setEditingProcurement({ ...editingProcurement, abc: value as any });
+                                                    }
+                                                }}
+                                                placeholder="5,000,000.00"
+                                                className="bg-[#1e293b] border-slate-700 text-white font-mono"
+                                            />
+                                            <p className="text-xs text-slate-500">Amount in Philippine Pesos</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-slate-300">Bid Amount (Contract Price)</Label>
+                                            <Input
+                                                type="text"
+                                                value={editingProcurement.bidAmount ? parseFloat(String(editingProcurement.bidAmount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/,/g, '');
+                                                    if (value === '' || !isNaN(parseFloat(value))) {
+                                                        setEditingProcurement({ ...editingProcurement, bidAmount: value as any });
+                                                    }
+                                                }}
+                                                placeholder="5,000,000.00"
+                                                className="bg-[#1e293b] border-slate-700 text-white font-mono"
+                                            />
+                                            <p className="text-xs text-slate-500">Actual awarded/contract amount</p>
+                                        </div>
+                                    </div>
+
+
+                                    {/* Supplier/Awarded to - Only for Regular Bidding */}
+                                    {editingProcurement.procurementType === 'Regular Bidding' && (
+                                        <div className="space-y-2">
+                                            <Label className="text-slate-300">Supplier / Awarded to</Label>
+                                            <Input
+                                                value={editingProcurement.supplier || ''}
+                                                onChange={(e) => setEditingProcurement({ ...editingProcurement, supplier: e.target.value })}
+                                                placeholder="Enter supplier or awardee name..."
+                                                className="bg-[#1e293b] border-slate-700 text-white"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+
+                            {/* Monitoring Process (Standard Grid) */}
+                            <div className="bg-[#0f172a] p-4 rounded-lg border border-slate-800 border-l-4 border-l-blue-500 space-y-4  mt-4 mb-4 shadow-sm min-h-[100px]">
+                                <div className="border-b border-slate-800 pb-2">
+                                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                                        <CalendarIcon className="h-4 w-4 text-blue-500" />
+                                        Monitoring Process
+                                    </h3>
+                                    <p className="text-xs text-slate-400">Update key dates. Use checkboxes to enable/disable steps.</p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {/* Pre-Procurement */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="h-8 w-1 bg-blue-500 rounded-full"></div>
+                                            <h4 className="text-sm font-semibold text-blue-400 uppercase tracking-wider">Pre-Procurement</h4>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-xs text-slate-300">Received PR</Label>
+                                                    <Checkbox
+                                                        checked={!!editingProcurement.receivedPrDate}
+                                                        onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, receivedPrDate: checked ? (editingProcurement.receivedPrDate || new Date().toISOString()) : undefined })}
+                                                        className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                                    />
+                                                </div>
+                                                <Input
+                                                    type="date"
+                                                    value={editingProcurement.receivedPrDate ? format(new Date(editingProcurement.receivedPrDate), 'yyyy-MM-dd') : ''}
+                                                    onChange={(e) => setEditingProcurement({ ...editingProcurement, receivedPrDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                    disabled={!editingProcurement.receivedPrDate}
+                                                    className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.receivedPrDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className={`text-xs ${!editingProcurement.receivedPrDate ? 'text-slate-600' : 'text-slate-300'}`}>PR Deliberated</Label>
+                                                    <Checkbox
+                                                        checked={!!editingProcurement.prDeliberatedDate}
+                                                        onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, prDeliberatedDate: checked ? (editingProcurement.prDeliberatedDate || new Date().toISOString()) : undefined })}
+                                                        disabled={!editingProcurement.receivedPrDate}
+                                                        className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                    />
+                                                </div>
+                                                <Input
+                                                    type="date"
+                                                    value={editingProcurement.prDeliberatedDate ? format(new Date(editingProcurement.prDeliberatedDate), 'yyyy-MM-dd') : ''}
+                                                    onChange={(e) => setEditingProcurement({ ...editingProcurement, prDeliberatedDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                    disabled={!editingProcurement.prDeliberatedDate || !editingProcurement.receivedPrDate}
+                                                    className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.prDeliberatedDate || !editingProcurement.receivedPrDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className={`text-xs ${!editingProcurement.prDeliberatedDate ? 'text-slate-600' : 'text-slate-300'}`}>Published</Label>
+                                                    <Checkbox
+                                                        checked={!!editingProcurement.publishedDate}
+                                                        onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, publishedDate: checked ? (editingProcurement.publishedDate || new Date().toISOString()) : undefined })}
+                                                        disabled={!editingProcurement.prDeliberatedDate}
+                                                        className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                    />
+                                                </div>
+                                                <Input
+                                                    type="date"
+                                                    value={editingProcurement.publishedDate ? format(new Date(editingProcurement.publishedDate), 'yyyy-MM-dd') : ''}
+                                                    onChange={(e) => setEditingProcurement({ ...editingProcurement, publishedDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                    disabled={!editingProcurement.publishedDate || !editingProcurement.prDeliberatedDate}
+                                                    className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.publishedDate || !editingProcurement.prDeliberatedDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Bidding / Canvass */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="h-8 w-1 bg-purple-500 rounded-full"></div>
+                                            <h4 className="text-sm font-semibold text-purple-400 uppercase tracking-wider">
+                                                {editingProcurement.procurementType === 'Regular Bidding' ? 'Bidding Proper' : 'Canvassing'}
+                                            </h4>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            {editingProcurement.procurementType === 'Regular Bidding' ? (
+                                                <>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.publishedDate ? 'text-slate-600' : 'text-slate-300'}`}>Pre-bid Conf</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.preBidDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, preBidDate: checked ? (editingProcurement.preBidDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.publishedDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.preBidDate ? format(new Date(editingProcurement.preBidDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, preBidDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.preBidDate || !editingProcurement.publishedDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.preBidDate || !editingProcurement.publishedDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.preBidDate ? 'text-slate-600' : 'text-slate-300'}`}>Bid Opening</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.bidOpeningDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, bidOpeningDate: checked ? (editingProcurement.bidOpeningDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.preBidDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.bidOpeningDate ? format(new Date(editingProcurement.bidOpeningDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, bidOpeningDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.bidOpeningDate || !editingProcurement.preBidDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.bidOpeningDate || !editingProcurement.preBidDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.bidOpeningDate ? 'text-slate-600' : 'text-slate-300'}`}>Bid Eval Report</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.bidEvaluationDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, bidEvaluationDate: checked ? (editingProcurement.bidEvaluationDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.bidOpeningDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.bidEvaluationDate ? format(new Date(editingProcurement.bidEvaluationDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, bidEvaluationDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.bidEvaluationDate || !editingProcurement.bidOpeningDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.bidEvaluationDate || !editingProcurement.bidOpeningDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.publishedDate ? 'text-slate-600' : 'text-slate-300'}`}>RFQ for Canvass</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.rfqCanvassDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, rfqCanvassDate: checked ? (editingProcurement.rfqCanvassDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.publishedDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.rfqCanvassDate ? format(new Date(editingProcurement.rfqCanvassDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, rfqCanvassDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.rfqCanvassDate || !editingProcurement.publishedDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.rfqCanvassDate || !editingProcurement.publishedDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.rfqCanvassDate ? 'text-slate-600' : 'text-slate-300'}`}>RFQ Opening</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.rfqOpeningDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, rfqOpeningDate: checked ? (editingProcurement.rfqOpeningDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.rfqCanvassDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.rfqOpeningDate ? format(new Date(editingProcurement.rfqOpeningDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, rfqOpeningDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.rfqOpeningDate || !editingProcurement.rfqCanvassDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.rfqOpeningDate || !editingProcurement.rfqCanvassDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Qualification & Award */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="h-8 w-1 bg-emerald-500 rounded-full"></div>
+                                            <h4 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider">Qualification & Award</h4>
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                            {editingProcurement.procurementType === 'Regular Bidding' && (
+                                                <>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.bidEvaluationDate ? 'text-slate-600' : 'text-slate-300'}`}>Post-Qual</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.postQualDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, postQualDate: checked ? (editingProcurement.postQualDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.bidEvaluationDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.postQualDate ? format(new Date(editingProcurement.postQualDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, postQualDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.postQualDate || !editingProcurement.bidEvaluationDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.postQualDate || !editingProcurement.bidEvaluationDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.postQualDate ? 'text-slate-600' : 'text-slate-300'}`}>Post-Qual Report</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.postQualReportDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, postQualReportDate: checked ? (editingProcurement.postQualReportDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.postQualDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.postQualReportDate ? format(new Date(editingProcurement.postQualReportDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, postQualReportDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.postQualReportDate || !editingProcurement.postQualDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.postQualReportDate || !editingProcurement.postQualDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className={`text-xs ${!editingProcurement.postQualReportDate && !editingProcurement.rfqOpeningDate ? 'text-slate-600' : 'text-slate-300'}`}>BAC Resolution</Label>
+                                                    <Checkbox
+                                                        checked={!!editingProcurement.bacResolutionDate}
+                                                        onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, bacResolutionDate: checked ? (editingProcurement.bacResolutionDate || new Date().toISOString()) : undefined })}
+                                                        disabled={editingProcurement.procurementType === 'Regular Bidding' ? !editingProcurement.postQualReportDate : !editingProcurement.rfqOpeningDate}
+                                                        className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                    />
+                                                </div>
+                                                <Input
+                                                    type="date"
+                                                    value={editingProcurement.bacResolutionDate ? format(new Date(editingProcurement.bacResolutionDate), 'yyyy-MM-dd') : ''}
+                                                    onChange={(e) => setEditingProcurement({ ...editingProcurement, bacResolutionDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                    disabled={!editingProcurement.bacResolutionDate || (editingProcurement.procurementType === 'Regular Bidding' ? !editingProcurement.postQualReportDate : !editingProcurement.rfqOpeningDate)}
+                                                    className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.bacResolutionDate || (editingProcurement.procurementType === 'Regular Bidding' ? !editingProcurement.postQualReportDate : !editingProcurement.rfqOpeningDate) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                />
+                                            </div>
+
+                                            {editingProcurement.procurementType === 'Regular Bidding' && (
+                                                <>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.bacResolutionDate ? 'text-slate-600' : 'text-slate-300'}`}>Notice of Award</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.noaDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, noaDate: checked ? (editingProcurement.noaDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.bacResolutionDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.noaDate ? format(new Date(editingProcurement.noaDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, noaDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.noaDate || !editingProcurement.bacResolutionDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.noaDate || !editingProcurement.bacResolutionDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.noaDate ? 'text-slate-600' : 'text-slate-300'}`}>Contract Date</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.contractDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, contractDate: checked ? (editingProcurement.contractDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.noaDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.contractDate ? format(new Date(editingProcurement.contractDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, contractDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.contractDate || !editingProcurement.noaDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.contractDate || !editingProcurement.noaDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.contractDate ? 'text-slate-600' : 'text-slate-300'}`}>NTP</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.ntpDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, ntpDate: checked ? (editingProcurement.ntpDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.contractDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.ntpDate ? format(new Date(editingProcurement.ntpDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, ntpDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.ntpDate || !editingProcurement.contractDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.ntpDate || !editingProcurement.contractDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.ntpDate ? 'text-slate-600' : 'text-slate-300'}`}>To OAPIA</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.forwardedOapiDate}
+                                                                onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, forwardedOapiDate: checked ? (editingProcurement.forwardedOapiDate || new Date().toISOString()) : undefined })}
+                                                                disabled={!editingProcurement.ntpDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.forwardedOapiDate ? format(new Date(editingProcurement.forwardedOapiDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, forwardedOapiDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.forwardedOapiDate || !editingProcurement.ntpDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.forwardedOapiDate || !editingProcurement.ntpDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {editingProcurement.procurementType === 'Regular Bidding' ? (
+                                                <>
+                                                    {/* Awarded to (Date + Supplier Name) - Regular Bidding Only */}
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.awardedToDate ? 'text-slate-600' : 'text-slate-300'}`}>Awarded Date</Label>
+                                                            <Checkbox
+                                                                checked={!!editingProcurement.awardedToDate}
+                                                                onCheckedChange={(checked) => {
+                                                                    const newDate = checked ? (editingProcurement.awardedToDate || new Date().toISOString()) : undefined;
+                                                                    setEditingProcurement({ ...editingProcurement, awardedToDate: newDate });
+                                                                }}
+                                                                disabled={!editingProcurement.forwardedOapiDate}
+                                                                className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600 disabled:opacity-50"
+                                                            />
+                                                        </div>
+                                                        <Input
+                                                            type="date"
+                                                            value={editingProcurement.awardedToDate ? format(new Date(editingProcurement.awardedToDate), 'yyyy-MM-dd') : ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, awardedToDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                            disabled={!editingProcurement.awardedToDate || !editingProcurement.forwardedOapiDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.awardedToDate || !editingProcurement.forwardedOapiDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={`text-xs ${!editingProcurement.awardedToDate ? 'text-slate-600' : 'text-slate-300'}`}>Supplier</Label>
+                                                        </div>
+                                                        <Input
+                                                            type="text"
+                                                            value={editingProcurement.supplier || ''}
+                                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, supplier: e.target.value })}
+                                                            placeholder="Supplier Name"
+                                                            disabled={!editingProcurement.awardedToDate || !editingProcurement.forwardedOapiDate}
+                                                            className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.awardedToDate || !editingProcurement.forwardedOapiDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                /* To GSD (For SVP / Others) */
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className={`text-xs ${!editingProcurement.forwardedGsdDate ? 'text-slate-600' : 'text-slate-300'}`}>To GSD</Label>
+                                                        <Checkbox
+                                                            checked={!!editingProcurement.forwardedGsdDate}
+                                                            onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, forwardedGsdDate: checked ? (editingProcurement.forwardedGsdDate || new Date().toISOString()) : undefined })}
+                                                            disabled={!editingProcurement.bacResolutionDate}
+                                                            className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
+                                                        />
+                                                    </div>
+                                                    <Input
+                                                        type="date"
+                                                        value={editingProcurement.forwardedGsdDate ? format(new Date(editingProcurement.forwardedGsdDate), 'yyyy-MM-dd') : ''}
+                                                        onChange={(e) => setEditingProcurement({ ...editingProcurement, forwardedGsdDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                        disabled={!editingProcurement.forwardedGsdDate || !editingProcurement.bacResolutionDate}
+                                                        className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.forwardedGsdDate || !editingProcurement.bacResolutionDate ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Checklist (Always shown for reference, or user can ignore) */}
@@ -1824,238 +2587,156 @@ const ProcurementList: React.FC = () => {
                                             </div>
                                         ))}
                                     </div>
-                                </div >
+                                </div>
                             )}
 
 
-                            {
-                                editingProcurement.status === 'active' && (
-                                    <div className="grid grid-cols-2 gap-4 bg-orange-500/10 p-4 rounded-lg border border-orange-500/20">
-                                        <div className="space-y-2">
-                                            <Label className="text-orange-300">Borrower Name</Label>
-                                            <Input
-                                                value={editingProcurement.borrowerName || ''}
-                                                onChange={(e) => setEditingProcurement({ ...editingProcurement, borrowerName: e.target.value })}
-                                                className="bg-[#1e293b] border-orange-500/30 text-white focus:border-orange-500"
-                                                placeholder="Enter borrower name"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-orange-300">Return Date</Label>
-                                            <Input
-                                                type="date"
-                                                value={editingProcurement.returnDate ? format(new Date(editingProcurement.returnDate), 'yyyy-MM-dd') : ''}
-                                                onChange={(e) => setEditingProcurement({ ...editingProcurement, returnDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
-                                                className="bg-[#1e293b] border-orange-500/30 text-white focus:border-orange-500"
-                                            />
-                                        </div>
-                                    </div>
-                                )
-                            }
 
-                            < div className="space-y-2 border-t border-slate-800 pt-4" >
+
+                            <div className="space-y-4 border-t border-slate-800 pt-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <Label className="text-lg font-semibold text-white">Location</Label>
-                                    <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingProcurement({ ...editingProcurement, boxId: null })}
-                                            className={`px-3 py-1 rounded text-xs font-medium transition-all ${!editingProcurement.boxId ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                                        >
-                                            Shelf
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingProcurement({ ...editingProcurement, boxId: '', shelfId: null, cabinetId: null, folderId: null })} // Set boxId to managed empty string (to show dropdown) but clear others
-                                            className={`px-3 py-1 rounded text-xs font-medium transition-all ${editingProcurement.boxId !== undefined && editingProcurement.boxId !== null ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                                        >
-                                            Box
-                                        </button>
-                                    </div>
                                 </div>
 
-                                {
-                                    !editingProcurement.boxId && editingProcurement.boxId !== '' ? (
-                                        <div className="grid grid-cols-3 gap-4 animate-in fade-in">
-                                            <div className="space-y-2">
-                                                <Label className="text-slate-300">Shelf</Label>
-                                                <Select
-                                                    value={editingProcurement.cabinetId}
-                                                    onValueChange={(val) => setEditingProcurement({
-                                                        ...editingProcurement,
-                                                        cabinetId: val,
-                                                        cabinetId: val,
-                                                        shelfId: null,
-                                                        folderId: null
-                                                    })}
-                                                >
-                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                        {cabinets.map((c) => (
-                                                            <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-slate-300">Cabinet</Label>
-                                                <Select
-                                                    value={editingProcurement.shelfId}
-                                                    onValueChange={(val) => setEditingProcurement({
-                                                        ...editingProcurement,
-                                                        shelfId: val,
-                                                        shelfId: val,
-                                                        folderId: null
-                                                    })}
-                                                    disabled={!editingProcurement.cabinetId}
-                                                >
-                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                        {editAvailableShelves.map((s) => (
-                                                            <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-slate-300">Folder</Label>
-                                                <Select
-                                                    value={editingProcurement.folderId}
-                                                    onValueChange={(val) => setEditingProcurement({ ...editingProcurement, folderId: val })}
-                                                    disabled={!editingProcurement.shelfId}
-                                                >
-                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                        {editAvailableFolders.map((f) => (
-                                                            <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="animate-in fade-in">
-                                            <div className="space-y-2">
-                                                <Label className="text-slate-300">Box</Label>
-                                                <Select
-                                                    value={editingProcurement.boxId || ''}
-                                                    onValueChange={(val) => setEditingProcurement({
-                                                        ...editingProcurement,
-                                                        boxId: val,
-                                                        boxId: val,
-                                                        shelfId: null, cabinetId: null, folderId: null // Clear others
-                                                    })}
-                                                >
-                                                    <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                        <SelectValue placeholder="Select Box" />
-                                                    </SelectTrigger>
-                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                        {boxes.map((b) => (
-                                                            <SelectItem key={b.id} value={b.id}>{b.code} - {b.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            </div >
+                                <div className="grid grid-cols-2 gap-4 animate-in fade-in">
+                                    <div className="space-y-2">
+                                        <Label className="text-slate-300">Box</Label>
+                                        <Select
+                                            value={editingProcurement.boxId || ''}
+                                            onValueChange={(val) => {
+                                                setEditingProcurement({
+                                                    ...editingProcurement,
+                                                    boxId: val,
+                                                    folderId: null // Reset folder
+                                                });
+                                            }}
+                                        >
+                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectValue placeholder="Select Box" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                {editAvailableBoxes.map((b) => (
+                                                    <SelectItem key={b.id} value={b.id}>{b.code} - {b.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-slate-300">Folder</Label>
+                                        <Select
+                                            value={editingProcurement.folderId || ''}
+                                            onValueChange={(val) => setEditingProcurement({ ...editingProcurement, folderId: val })}
+                                            disabled={!editingProcurement.boxId}
+                                        >
+                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                <SelectValue placeholder="Select Folder" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                {editAvailableFolders.map((f) => (
+                                                    <SelectItem key={f.id} value={f.id}>{f.code} - {f.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </div>
 
                             <div className="border-t border-slate-800 pt-4">
                                 <div className="space-y-2">
                                     <Label className="text-slate-300">Status</Label>
                                     <Select
                                         value={editingProcurement.status}
-                                        onValueChange={(val) => setEditingProcurement({ ...editingProcurement, status: val as ProcurementStatus })}
+                                        onValueChange={(val) => {
+                                            const newStatus = val as ProcurementStatus;
+                                            const updates = { ...editingProcurement, status: newStatus };
+
+                                            // Auto-set borrowed date if moving to active and no date set
+                                            if (newStatus === 'active' && !updates.borrowedDate) {
+                                                const now = new Date();
+                                                // Adjust for offset if needed, or just use ISO (common practice)
+                                                // Using local YYYY-MM-DD for input compatibility or ISO for storage
+                                                updates.borrowedDate = now.toISOString();
+                                            }
+
+                                            setEditingProcurement(updates);
+                                        }}
                                     >
                                         <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                            <SelectItem value="archived">Archived</SelectItem>
-                                            <SelectItem value="active">Borrowed</SelectItem>
+                                            <SelectItem value="archived">Archived (In Storage)</SelectItem>
+                                            <SelectItem value="active">Borrowed (Out)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
 
-                            {/* Borrower Information Section - Always shown */}
-                            <div className="space-y-4 border-t border-slate-800 pt-4">
-                                <Label className="text-lg font-semibold text-white">Borrower Information</Label>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Borrowed By</Label>
-                                        <Input
-                                            value={editingProcurement.borrowedBy || ''}
-                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, borrowedBy: e.target.value })}
-                                            className="bg-[#1e293b] border-slate-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                            placeholder="Enter name"
-                                            disabled={editingProcurement.status === 'archived'}
-                                        />
+                            {/* Borrower Information Section - Always shown when Active */}
+                            {
+                                editingProcurement.status === 'active' && (
+                                    <div className="bg-amber-500/10 p-4 rounded-lg border border-amber-500/20 space-y-4 pt-4 animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex items-center gap-2 border-b border-amber-500/20 pb-2 mb-2">
+                                            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                                            <h4 className="text-amber-400 font-semibold text-sm">Borrowed Information</h4>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label className="text-amber-300">Who Borrows</Label>
+                                                <Input
+                                                    value={editingProcurement.borrowedBy || ''}
+                                                    onChange={(e) => setEditingProcurement({ ...editingProcurement, borrowedBy: e.target.value })}
+                                                    className="bg-[#1e293b] border-amber-500/30 text-white focus:border-amber-500"
+                                                    placeholder="Enter borrower name"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-amber-300">Division Who Borrows</Label>
+                                                <Select
+                                                    value={editingProcurement.borrowerDivision || ''}
+                                                    onValueChange={(val) => setEditingProcurement({ ...editingProcurement, borrowerDivision: val })}
+                                                >
+                                                    <SelectTrigger className="bg-[#1e293b] border-amber-500/30 text-white focus:border-amber-500">
+                                                        <SelectValue placeholder="Select Division" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
+                                                        {divisions.sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
+                                                            <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label className="text-amber-300">When Was Borrowed</Label>
+                                                <Input
+                                                    type="date"
+                                                    value={editingProcurement.borrowedDate ? format(new Date(editingProcurement.borrowedDate), 'yyyy-MM-dd') : ''}
+                                                    onChange={(e) => setEditingProcurement({
+                                                        ...editingProcurement,
+                                                        borrowedDate: e.target.value ? new Date(e.target.value).toISOString() : undefined
+                                                    })}
+                                                    className="bg-[#1e293b] border-amber-500/30 text-white focus:border-amber-500"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-amber-300">Return Date</Label>
+                                                <Input
+                                                    type="date"
+                                                    value={editingProcurement.returnDate ? format(new Date(editingProcurement.returnDate), 'yyyy-MM-dd') : ''}
+                                                    onChange={(e) => setEditingProcurement({ ...editingProcurement, returnDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                                                    className="bg-[#1e293b] border-amber-500/30 text-white focus:border-amber-500"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Borrower Division</Label>
-                                        <Select
-                                            value={editingProcurement.borrowerDivision || ''}
-                                            onValueChange={(val) => setEditingProcurement({ ...editingProcurement, borrowerDivision: val })}
-                                            disabled={editingProcurement.status === 'archived'}
-                                        >
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue placeholder="Select Division" />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white h-[200px]">
-                                                {divisions.sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                                                    <SelectItem key={d.id} value={d.name}>{d.name} ({d.abbreviation})</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Borrowed Date</Label>
-                                        <Input
-                                            type="text"
-                                            value={editingProcurement.borrowedDate ? format(new Date(editingProcurement.borrowedDate), 'MMMM d, yyyy') : 'Not set'}
-                                            disabled
-                                            className="bg-[#1e293b]/50 border-slate-700 text-slate-400 cursor-not-allowed"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Return Date</Label>
-                                        <Input
-                                            type="text"
-                                            value={editingProcurement.returnDate ? format(new Date(editingProcurement.returnDate), 'MMMM d, yyyy') : 'Not set'}
-                                            disabled
-                                            className="bg-[#1e293b]/50 border-slate-700 text-slate-400 cursor-not-allowed"
-                                        />
-                                    </div>
-                                </div>
-
-                                {editingProcurement.status === 'archived' && (
-                                    <div className="space-y-2">
-                                        <Label className="text-slate-300">Returned By</Label>
-                                        <Input
-                                            value={editingProcurement.returnedBy || ''}
-                                            onChange={(e) => setEditingProcurement({ ...editingProcurement, returnedBy: e.target.value })}
-                                            className="bg-[#1e293b] border-slate-700 text-white"
-                                            placeholder="Enter name of person who returned"
-                                        />
-                                    </div>
-                                )}
-                            </div>
+                                )
+                            }
 
 
                             {/* Record History Section */}
-                            < div className="space-y-4 border-t border-slate-800 pt-4" >
+                            <div className="space-y-4 border-t border-slate-800 pt-4">
                                 <Label className="text-lg font-semibold text-white">Record History</Label>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -2099,24 +2780,31 @@ const ProcurementList: React.FC = () => {
                                         </div>
                                     )
                                 }
-                            </div >
-                        </div >
+                            </div>
+                        </div>
 
-                    )}
-
-                    <DialogFooter className="p-6 pt-2 border-t border-slate-800 bg-[#0f172a]">
-                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="border-slate-700 text-white hover:bg-slate-800">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSaveEdit} className="bg-blue-600 hover:bg-blue-700">
-                            Save Changes
-                        </Button>
-                    </DialogFooter>
-                </DialogContent >
-            </Dialog >
+                        <DialogFooter className="p-6 pt-2 border-t border-slate-800 bg-[#0f172a]">
+                            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="border-slate-700 text-white hover:bg-slate-800">
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSaveEdit} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    'Save Changes'
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </>)
+                    }
+                </DialogContent>
+            </Dialog>
 
             {/* Return Modal */}
-            < Dialog open={!!returnModal} onOpenChange={() => setReturnModal(null)}>
+            <Dialog open={!!returnModal} onOpenChange={() => setReturnModal(null)}>
                 <DialogContent className="bg-[#0f172a] border-slate-800 text-white">
                     <DialogHeader>
                         <DialogTitle>Return File</DialogTitle>
@@ -2154,15 +2842,15 @@ const ProcurementList: React.FC = () => {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog >
+            </Dialog>
 
             {/* Borrow Edit Modal */}
-            < Dialog open={!!borrowEditModal} onOpenChange={() => setBorrowEditModal(null)}>
+            <Dialog open={!!borrowEditModal} onOpenChange={() => setBorrowEditModal(null)}>
                 <DialogContent className="bg-[#0f172a] border-slate-800 text-white">
                     <DialogHeader>
                         <DialogTitle>Borrow File</DialogTitle>
                         <DialogDescription className="text-slate-400">
-                            Enter the borrower details. The borrowed date will be automatically recorded.
+                            Enter the borrower details.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -2175,6 +2863,18 @@ const ProcurementList: React.FC = () => {
                                     prev ? { ...prev, borrowedBy: e.target.value } : null
                                 )}
                                 placeholder="Enter name"
+                                className="bg-[#1e293b] border-slate-700 text-white"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="borrowedDate" className="text-slate-300">Borrowed Date</Label>
+                            <Input
+                                id="borrowedDate"
+                                type="date"
+                                value={borrowEditModal?.borrowedDate ? format(new Date(borrowEditModal.borrowedDate), 'yyyy-MM-dd') : ''}
+                                onChange={(e) => setBorrowEditModal(prev =>
+                                    prev ? { ...prev, borrowedDate: e.target.value ? new Date(e.target.value).toISOString() : undefined } : null
+                                )}
                                 className="bg-[#1e293b] border-slate-700 text-white"
                             />
                         </div>
@@ -2213,10 +2913,10 @@ const ProcurementList: React.FC = () => {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog >
+            </Dialog>
 
             {/* Export Configuration Dialog */}
-            <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
+            <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen} >
                 <DialogContent className="bg-[#1e293b] border-slate-800 text-white max-w-md">
                     <DialogHeader>
                         <DialogTitle>Export CSV Configuration</DialogTitle>
@@ -2275,30 +2975,7 @@ const ProcurementList: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Progress Filter */}
-                        <div className="space-y-2">
-                            <Label className="text-slate-300">Progress</Label>
-                            <div className="flex flex-wrap gap-2">
-                                {progressStatusOptions.map(status => (
-                                    <div key={status} className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id={`export-progress-${status}`}
-                                            checked={exportFilters.progress.includes(status)}
-                                            onCheckedChange={(checked) => {
-                                                setExportFilters(prev => ({
-                                                    ...prev,
-                                                    progress: checked
-                                                        ? [...prev.progress, status]
-                                                        : prev.progress.filter(s => s !== status)
-                                                }));
-                                            }}
-                                            className="border-slate-500 data-[state=checked]:bg-blue-600"
-                                        />
-                                        <Label htmlFor={`export-progress-${status}`} className="text-xs text-slate-300">{status}</Label>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+
 
                         {/* Division Filter */}
                         <div className="space-y-2">
@@ -2359,7 +3036,6 @@ const ProcurementList: React.FC = () => {
                 onOpenChange={(open) => !open && setViewProcurement(null)}
                 procurement={viewProcurement}
                 getLocationString={getLocationString}
-                folders={folders}
             />
             {/* Relocate/Reorder Dialog */}
             <Dialog open={isRelocateDialogOpen} onOpenChange={setIsRelocateDialogOpen}>
@@ -2394,7 +3070,7 @@ const ProcurementList: React.FC = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div >
+        </div>
     );
 };
 

@@ -51,12 +51,13 @@ const Folders: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const cabinetIdFromUrl = searchParams.get('cabinetId'); // Actually Cabinet ID (Parent)
+    const boxIdFromUrl = searchParams.get('boxId');
 
     // DataContext
     // shelves = Tier 1 (S1)
     // cabinets = Tier 2 (C1)
     // folders = Tier 3 (F1)
-    const { shelves, cabinets, folders, procurements } = useData();
+    const { shelves, cabinets, folders, boxes, procurements } = useData();
 
     // UI State
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -69,6 +70,7 @@ const Folders: React.FC = () => {
     // Filter
     const [filterTier1Id, setFilterTier1Id] = useState<string>(''); // Filter by Shelf (Tier 1)
     const [filterCabinetId, setFilterCabinetId] = useState<string>(cabinetIdFromUrl || '');
+    const [filterBoxId, setFilterBoxId] = useState<string>(boxIdFromUrl || '');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortField, setSortField] = useState<'name' | 'code' | 'contents' | 'stackNumber'>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -80,8 +82,11 @@ const Folders: React.FC = () => {
     // Form State
     const [name, setName] = useState('');
     const [code, setCode] = useState('');
-    const [selectedTier1Id, setSelectedTier1Id] = useState(''); // Tier 1 (Shelf/Cabinet type)
-    const [parentCabinetId, setParentCabinetId] = useState(''); // Tier 2 (Cabinet/Shelf type) - Stores into folder.shelfId
+    const [selectedTier1Id, setSelectedTier1Id] = useState(''); // Drawer (Cabinet in DB)
+    const [selectedTier2Id, setSelectedTier2Id] = useState(''); // Cabinet (Shelf in DB)
+    const [selectedBoxId, setSelectedBoxId] = useState('');     // Box
+    const [parentType, setParentType] = useState<'shelf' | 'box'>('shelf'); // Parent Type
+
     const [description, setDescription] = useState('');
     const [color, setColor] = useState('#FF6B6B');
 
@@ -94,33 +99,56 @@ const Folders: React.FC = () => {
     useEffect(() => {
         if (cabinetIdFromUrl) {
             setFilterCabinetId(cabinetIdFromUrl);
+            setFilterBoxId('');
         }
-    }, [cabinetIdFromUrl]);
+        if (boxIdFromUrl) {
+            setFilterBoxId(boxIdFromUrl);
+            setFilterCabinetId(''); // Clear cabinet filter if box is selected
+        }
+    }, [cabinetIdFromUrl, boxIdFromUrl]);
 
     const resetForm = () => {
         setName('');
         setCode('');
         setSelectedTier1Id('');
-        setParentCabinetId('');
+        setSelectedTier2Id('');
+        setSelectedBoxId('');
+        setParentType('shelf');
         setDescription('');
         setColor('#FF6B6B');
         setCurrentFolder(null);
     };
 
     const handleAdd = async () => {
-        if (!name || !code || !parentCabinetId) {
-            toast.error('Name, Code, and Parent Cabinet are required');
+        // Validation
+        if (!name || !code) {
+            toast.error('Name and Code are required');
             return;
         }
 
+        let parentId = '';
+        if (parentType === 'shelf') {
+            if (!selectedTier2Id) {
+                toast.error('Parent Cabinet is required');
+                return;
+            }
+            parentId = selectedTier2Id;
+        } else {
+            if (!selectedBoxId) {
+                toast.error('Parent Box is required');
+                return;
+            }
+            parentId = selectedBoxId;
+        }
+
         try {
-            // folder.shelfId stores Parent Cabinet ID
-            await addFolder(parentCabinetId, name, code, description, color);
+            await addFolder(parentId, name, code, description, color, parentType);
             setIsAddDialogOpen(false);
             resetForm();
             toast.success('Folder added successfully');
-        } catch (error) {
-            toast.error('Failed to add folder');
+        } catch (error: any) {
+            console.error(error);
+            toast.error(`Failed to add folder: ${error.message || 'Unknown error'}`);
         }
     };
 
@@ -129,25 +157,72 @@ const Folders: React.FC = () => {
         setName(folder.name);
         setCode(folder.code);
 
-        // folder.shelfId is Tier 2 (Cabinet/Shelf type). We need its parent (Tier 1) for the first dropdown.
-        const parentTier2 = shelves.find(s => s.id === folder.shelfId);
-        if (parentTier2) {
-            setSelectedTier1Id(parentTier2.cabinetId);
-        } else {
-            setSelectedTier1Id('');
+        if (folder.boxId) {
+            setParentType('box');
+            setSelectedBoxId(folder.boxId);
+            // Find parent Cabinet (Tier 2) -> Drawer (Tier 1) logic
+            const box = boxes.find(b => b.id === folder.boxId);
+            if (box) {
+                if (box.shelfId) setSelectedTier2Id(box.shelfId); // Box's ShelfId is Cabinet
+                if (box.cabinetId) setSelectedTier1Id(box.cabinetId); // Box's CabinetId is Drawer
+            }
+        } else if (folder.shelfId) {
+            setParentType('shelf');
+            setSelectedTier2Id(folder.shelfId);
+            const shelf = shelves.find(s => s.id === folder.shelfId); // Shelf is Cabinet
+            if (shelf) {
+                setSelectedTier1Id(shelf.cabinetId); // Cabinet is Drawer
+            }
         }
 
-        setParentCabinetId(folder.shelfId); // shelfId holds Cabinet ID (Tier 2)
         setDescription(folder.description || '');
         setColor(folder.color || '#FF6B6B');
         setIsEditDialogOpen(true);
     };
 
     const handleUpdate = async () => {
-        if (!currentFolder || !name || !code || !parentCabinetId) return;
+        if (!currentFolder || !name || !code) return;
+
+        let parentId = '';
+        if (parentType === 'shelf') {
+            if (!selectedTier2Id) return;
+            parentId = selectedTier2Id;
+        } else {
+            if (!selectedBoxId) return;
+            parentId = selectedBoxId;
+        }
 
         try {
-            await updateFolder(currentFolder.id, { shelfId: parentCabinetId, name, code, description, color });
+            // Explicitly set the other ID to null/undefined to clear it if moving between types
+            const updates: any = {
+                name,
+                code,
+                description,
+                color,
+                shelfId: parentType === 'shelf' ? parentId : null,
+                boxId: parentType === 'box' ? parentId : null
+            };
+
+            // Check if parent changed
+            const isOldShelf = !!currentFolder.shelfId;
+            const isNewShelf = parentType === 'shelf';
+
+            const oldParentId = currentFolder.shelfId || currentFolder.boxId;
+            const newParentId = parentId;
+
+            const hasParentChanged = (isOldShelf !== isNewShelf) || (oldParentId !== newParentId);
+
+            if (hasParentChanged) {
+                // Calculate new stack number
+                const siblings = folders.filter(f => {
+                    if (isNewShelf) return f.shelfId === newParentId;
+                    return f.boxId === newParentId;
+                });
+                const maxStack = Math.max(...siblings.map(f => f.stackNumber || 0), 0);
+                updates.stackNumber = maxStack + 1;
+            }
+
+            await updateFolder(currentFolder.id, updates);
             setIsEditDialogOpen(false);
             resetForm();
             toast.success('Folder updated successfully');
@@ -265,8 +340,11 @@ const Folders: React.FC = () => {
     // Filtering and Sorting
     const filteredFolders = folders
         .filter(folder => {
-            // Filter by parent Cabinet (dropdown/URL)
-            // folder.shelfId -> Parent Cabinet ID
+            // Filter by Box
+            if (filterBoxId && filterBoxId !== 'all') {
+                return folder.boxId === filterBoxId;
+            }
+
             // Filter by parent Cabinet (dropdown/URL)
             // folder.shelfId -> Parent Cabinet ID
             if (filterCabinetId && filterCabinetId !== 'all' && folder.shelfId !== filterCabinetId) {
@@ -356,37 +434,82 @@ const Folders: React.FC = () => {
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
                                 <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label className="text-right text-slate-300">Shelf</Label>
-                                    <select
-                                        value={selectedTier1Id}
-                                        onChange={(e) => {
-                                            setSelectedTier1Id(e.target.value);
-                                            setParentCabinetId(''); // Reset Tier 2 selection
-                                        }}
-                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                    >
-                                        <option value="">Select Shelf</option>
-                                        {cabinets.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                                        ))}
-                                    </select>
+                                    <Label className="text-right text-slate-300">Location</Label>
+                                    <div className="col-span-3 flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setParentType('shelf')}
+                                            className={`px-3 py-1 rounded text-sm transition-all ${parentType === 'shelf' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                        >
+                                            Drawer {'>'} Cabinet
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setParentType('box')}
+                                            className={`px-3 py-1 rounded text-sm transition-all ${parentType === 'box' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                        >
+                                            Inside Box
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label className="text-right text-slate-300">Parent Cabinet</Label>
-                                    <select
-                                        value={parentCabinetId}
-                                        onChange={(e) => setParentCabinetId(e.target.value)}
-                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                        disabled={!selectedTier1Id}
-                                    >
-                                        <option value="">Select Cabinet</option>
-                                        {shelves
-                                            .filter(s => s.cabinetId === selectedTier1Id)
-                                            .map(s => (
-                                                <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+
+                                {parentType === 'shelf' && (
+                                    <>
+                                        <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label className="text-right text-slate-300">Drawer</Label>
+                                            <select
+                                                value={selectedTier1Id}
+                                                onChange={(e) => {
+                                                    setSelectedTier1Id(e.target.value);
+                                                    setSelectedTier2Id('');
+                                                    setSelectedBoxId('');
+                                                }}
+                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                            >
+                                                <option value="">Select Drawer</option>
+                                                {cabinets.map(c => (
+                                                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-4 items-center gap-4">
+                                            <Label className="text-right text-slate-300">Parent Cabinet</Label>
+                                            <select
+                                                value={selectedTier2Id}
+                                                onChange={(e) => {
+                                                    setSelectedTier2Id(e.target.value);
+                                                    setSelectedBoxId('');
+                                                }}
+                                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                                disabled={!selectedTier1Id}
+                                            >
+                                                <option value="">Select Cabinet</option>
+                                                {shelves
+                                                    .filter(s => s.cabinetId === selectedTier1Id)
+                                                    .map(s => (
+                                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                                    ))}
+                                            </select>
+                                        </div>
+                                    </>
+                                )}
+
+                                {parentType === 'box' && (
+                                    <div className="grid grid-cols-4 items-center gap-4 animate-in fade-in">
+                                        <Label className="text-right text-slate-300">Parent Box</Label>
+                                        <select
+                                            value={selectedBoxId}
+                                            onChange={(e) => setSelectedBoxId(e.target.value)}
+                                            className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                        >
+                                            <option value="">Select Box</option>
+                                            {boxes.map(b => (
+                                                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
                                             ))}
-                                    </select>
-                                </div>
+                                        </select>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="name" className="text-right text-slate-300">Name</Label>
                                     <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />
@@ -459,10 +582,10 @@ const Folders: React.FC = () => {
                         <Label className="text-slate-300 whitespace-nowrap">Filter:</Label>
                         <Select value={filterTier1Id} onValueChange={setFilterTier1Id}>
                             <SelectTrigger className="w-[200px] bg-[#1e293b] border-slate-700 text-white">
-                                <SelectValue placeholder="All Shelves" />
+                                <SelectValue placeholder="All Drawers" />
                             </SelectTrigger>
                             <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                <SelectItem value="all">All Shelves</SelectItem>
+                                <SelectItem value="all">All Drawers</SelectItem>
                                 {cabinets.map(c => (
                                     <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
                                 ))}
@@ -518,8 +641,7 @@ const Folders: React.FC = () => {
                                     />
                                 </TableHead>
                                 <TableHead className="text-slate-300">Name</TableHead>
-                                <TableHead className="text-slate-300">Parent Shelf</TableHead>
-                                <TableHead className="text-slate-300">Parent Cabinet</TableHead>
+                                <TableHead className="text-slate-300">Parent Container</TableHead>
                                 <TableHead className="text-slate-300">Code</TableHead>
                                 <TableHead className="text-slate-300">Color</TableHead>
                                 <TableHead className="text-center text-slate-300">Stack #</TableHead>
@@ -559,10 +681,22 @@ const Folders: React.FC = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-slate-300">
-                                            {getParentShelfName(folder.shelfId)}
-                                        </TableCell>
-                                        <TableCell className="text-slate-300">
-                                            {getParentCabinetName(folder.shelfId)}
+                                            {folder.boxId ? (
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs text-slate-500">Box</span>
+                                                    <span className="text-sm text-amber-400">
+                                                        {(() => {
+                                                            const box = boxes.find(b => b.id === folder.boxId);
+                                                            return box ? `${box.name} (${box.code})` : 'Unknown Box';
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs text-slate-400">{getParentShelfName(folder.shelfId)}</span>
+                                                    <span className="text-sm">↳ {getParentCabinetName(folder.shelfId)}</span>
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
@@ -719,37 +853,82 @@ const Folders: React.FC = () => {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right text-slate-300">Shelf</Label>
-                            <select
-                                value={selectedTier1Id}
-                                onChange={(e) => {
-                                    setSelectedTier1Id(e.target.value);
-                                    setParentCabinetId('');
-                                }}
-                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                            >
-                                <option value="">Select Shelf</option>
-                                {cabinets.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                                ))}
-                            </select>
+                            <Label className="text-right text-slate-300">Location</Label>
+                            <div className="col-span-3 flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setParentType('shelf')}
+                                    className={`px-3 py-1 rounded text-sm transition-all ${parentType === 'shelf' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                >
+                                    Drawer {'>'} Cabinet
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setParentType('box')}
+                                    className={`px-3 py-1 rounded text-sm transition-all ${parentType === 'box' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                >
+                                    Inside Box
+                                </button>
+                            </div>
                         </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right text-slate-300">Parent Cabinet</Label>
-                            <select
-                                value={parentCabinetId}
-                                onChange={(e) => setParentCabinetId(e.target.value)}
-                                className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
-                                disabled={!selectedTier1Id}
-                            >
-                                <option value="">Select Cabinet</option>
-                                {shelves
-                                    .filter(s => s.cabinetId === selectedTier1Id)
-                                    .map(s => (
-                                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+
+                        {parentType === 'shelf' && (
+                            <>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right text-slate-300">Drawer</Label>
+                                    <select
+                                        value={selectedTier1Id}
+                                        onChange={(e) => {
+                                            setSelectedTier1Id(e.target.value);
+                                            setSelectedTier2Id('');
+                                            setSelectedBoxId('');
+                                        }}
+                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                    >
+                                        <option value="">Select Drawer</option>
+                                        {cabinets.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label className="text-right text-slate-300">Parent Cabinet</Label>
+                                    <select
+                                        value={selectedTier2Id}
+                                        onChange={(e) => {
+                                            setSelectedTier2Id(e.target.value);
+                                            setSelectedBoxId('');
+                                        }}
+                                        className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                        disabled={!selectedTier1Id}
+                                    >
+                                        <option value="">Select Cabinet</option>
+                                        {shelves
+                                            .filter(s => s.cabinetId === selectedTier1Id)
+                                            .map(s => (
+                                                <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                                            ))}
+                                    </select>
+                                </div>
+                            </>
+                        )}
+
+                        {parentType === 'box' && (
+                            <div className="grid grid-cols-4 items-center gap-4 animate-in fade-in">
+                                <Label className="text-right text-slate-300">Parent Box</Label>
+                                <select
+                                    value={selectedBoxId}
+                                    onChange={(e) => setSelectedBoxId(e.target.value)}
+                                    className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
+                                >
+                                    <option value="">Select Box</option>
+                                    {boxes.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
                                     ))}
-                            </select>
-                        </div>
+                                </select>
+                            </div>
+                        )}
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="edit-name" className="text-right text-slate-300">Name</Label>
                             <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3 bg-[#1e293b] border-slate-700 text-white" />

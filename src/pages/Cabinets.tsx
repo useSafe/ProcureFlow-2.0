@@ -257,7 +257,7 @@ const Cabinets: React.FC = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-white">Cabinets</h1>
-                    <p className="text-slate-400 mt-1">Manage cabinets within shelves (Tier 2)</p>
+                    <p className="text-slate-400 mt-1">Manage cabinets within drawers (Tier 2)</p>
                 </div>
                 <div className="flex gap-2">
                     {selectedIds.length > 0 && (
@@ -292,18 +292,18 @@ const Cabinets: React.FC = () => {
                             <DialogHeader>
                                 <DialogTitle>Add New Cabinet</DialogTitle>
                                 <DialogDescription className="text-slate-400">
-                                    Create a new cabinet inside a shelf.
+                                    Create a new cabinet inside a drawer.
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
                                 <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label className="text-right text-slate-300">Parent Shelf</Label>
+                                    <Label className="text-right text-slate-300">Parent Drawer</Label>
                                     <select
                                         value={parentShelfId}
                                         onChange={(e) => setParentShelfId(e.target.value)}
                                         className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
                                     >
-                                        <option value="">Select Shelf</option>
+                                        <option value="">Select Drawer</option>
                                         {cabinets.map(s => (
                                             <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                                         ))}
@@ -343,10 +343,10 @@ const Cabinets: React.FC = () => {
                         <Label className="text-slate-300 whitespace-nowrap">Filter:</Label>
                         <Select value={filterShelfId} onValueChange={setFilterShelfId}>
                             <SelectTrigger className="w-[200px] bg-[#1e293b] border-slate-700 text-white">
-                                <SelectValue placeholder="All Shelves" />
+                                <SelectValue placeholder="All Drawers" />
                             </SelectTrigger>
                             <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                <SelectItem value="all">All Shelves</SelectItem>
+                                <SelectItem value="all">All Drawers</SelectItem>
                                 {cabinets.map(s => (
                                     <SelectItem key={s.id} value={s.id}>{s.code} - {s.name}</SelectItem>
                                 ))}
@@ -388,7 +388,7 @@ const Cabinets: React.FC = () => {
                                     />
                                 </TableHead>
                                 <TableHead className="text-slate-300">Name</TableHead>
-                                <TableHead className="text-slate-300">Parent Shelf</TableHead>
+                                <TableHead className="text-slate-300">Parent Drawer</TableHead>
                                 <TableHead className="text-slate-300">Code</TableHead>
                                 <TableHead className="text-slate-300">Contents</TableHead>
                                 <TableHead className="text-right text-slate-300">Actions</TableHead>
@@ -528,13 +528,13 @@ const Cabinets: React.FC = () => {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right text-slate-300">Parent Shelf</Label>
+                            <Label className="text-right text-slate-300">Parent Drawer</Label>
                             <select
                                 value={parentShelfId}
                                 onChange={(e) => setParentShelfId(e.target.value)}
                                 className="col-span-3 bg-[#1e293b] border-slate-700 text-white rounded-md p-2"
                             >
-                                <option value="">Select Shelf</option>
+                                <option value="">Select Drawer</option>
                                 {cabinets.map(s => (
                                     <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                                 ))}

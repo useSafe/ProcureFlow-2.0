@@ -1,12 +1,11 @@
-export type ProcurementStatus = 'active' | 'archived';
-export type UrgencyLevel = 'low' | 'medium' | 'high' | 'critical';
-export type ProgressStatus = 'Pending' | 'Success' | 'Failed' | 'Cancelled';
+// [Removed ProgressStatus - Legacy]
+
 
 // Location Hierarchy Types
 export interface Cabinet {
     id: string;
     name: string;
-    code: string; // e.g., "C1", "C2"
+    code: string; // e.g., "C1", "C2" (UI: "Drawer")
     description?: string;
     createdAt: string;
 }
@@ -15,14 +14,15 @@ export interface Shelf {
     id: string;
     cabinetId: string;
     name: string;
-    code: string; // e.g., "S1", "S2"
+    code: string; // e.g., "S1", "S2" (UI: "Cabinet")
     description?: string;
     createdAt: string;
 }
 
 export interface Folder {
     id: string;
-    shelfId: string;
+    shelfId?: string; // Optional now as it can be in a Box
+    boxId?: string;   // New: Folder can be inside a Box
     name: string;
     code: string; // e.g., "F1", "F2"
     description?: string;
@@ -33,6 +33,8 @@ export interface Folder {
 
 export interface Box {
     id: string;
+    cabinetId?: string; // Optional: box might be standalone
+    shelfId?: string;   // Optional: box might be standalone
     name: string;
     code: string; // e.g., "B1"
     description?: string;
@@ -46,82 +48,99 @@ export interface Division {
     createdAt: string;
 }
 
-// Expanded Checklist based on user image
+// Checklists (Simplified/Optional in Procurement, detailed in UI)
 export interface ProcurementChecklist {
-    noticeToProceed: boolean; // A
-    contractOfAgreement: boolean; // B
-    noticeOfAward: boolean; // C
-    bacResolutionAward: boolean; // D
-    postQualReport: boolean; // E
-    noticePostQual: boolean; // F
-    bacResolutionPostQual: boolean; // G
-    abstractBidsEvaluated: boolean; // H
-    twgBidEvalReport: boolean; // I
-    minutesBidOpening: boolean; // J
-    resultEligibilityCheck: boolean; // K
-    biddersTechFinancialProposals: boolean; // L
-    minutesPreBid: boolean; // M
-    biddingDocuments: boolean; // N
-    otherDocsPeculiar: boolean; // O
-    // O.1 - O.4
-    inviteObservers: boolean;
-    officialReceipt: boolean;
-    boardResolution: boolean;
-    philgepsAwardNotice: boolean;
-    // P
-    inviteApplyEligibility: boolean;
-    philgepsPosting: boolean; // P.1
-    websitePosting: boolean; // P.2
-    postingCertificate: boolean; // P.3
-    // Q
-    fundsAvailability: boolean;
+    // We can keep this generic or expand it, but mostly we will just store checks
+    [key: string]: boolean | undefined;
 }
+
+// Expanded Statuses
+export type ProcurementProcessStatus =
+    | 'Completed'
+    | 'In Progress'
+    | 'Returned PR to EU'
+    | 'Not yet Acted'
+    | 'Failure'
+    | 'Cancelled';
+
+// [Removed ProgressStatus - Legacy]
 
 // Simplified Procurement (File Record)
 export interface Procurement {
     id: string;
-    prNumber: string;
-    description: string;
-    dateAdded: string; // Date the record was added to system
+    prNumber: string; // SVP: No Div/User, Regular: No Div/User
+    description: string; // "Remarks" in Export
+    projectName?: string; // "Particulars" in Export
 
-    // Location tracking (Cabinet > Shelf > Folder OR Box)
+    dateAdded: string; // System Creation Date
+
+    // Location tracking (Drawer -> Cabinet -> Folder OR Box -> Folder)
     cabinetId?: string | null;
     shelfId?: string | null;
     folderId?: string | null;
     boxId?: string | null;
 
-    // Status
-    status: ProcurementStatus;
+    // Status (Physical Location)
+    status: ProcurementStatus; // 'active' (Borrowed) | 'archived' (Stored)
+
+    // New Fields
+    abc?: number;
+    procurementStatus?: ProcurementProcessStatus;
+    dateStatusUpdated?: string;
+
+    // Monitoring Dates - SVP & Common
+    receivedPrDate?: string;
+    prDeliberatedDate?: string;
+    publishedDate?: string; // Procurement Date
+    rfqCanvassDate?: string;
+    rfqOpeningDate?: string;
+    bacResolutionDate?: string;
+    forwardedGsdDate?: string;
+
+    // Monitoring Dates - Regular Bidding
+    preBidDate?: string;
+    bidOpeningDate?: string;
+    bidEvaluationDate?: string;
+    postQualDate?: string;
+    postQualReportDate?: string;
+    forwardedOapiDate?: string; // OAPIA
+    noaDate?: string;
+    contractDate?: string;
+    ntpDate?: string;
+    awardedToDate?: string; // Date Awarded
+
+    supplier?: string;
+    bidAmount?: number;
+    notes?: string;
+    remarks?: string; // Explicit remarks field if description is used for something else, but Plan said Remarks <- Description. I'll add this just in case.
+
     urgencyLevel: UrgencyLevel;
-    progressStatus?: ProgressStatus; // New: Pending, Success, Failed
 
     // Metadata
     procurementType?: 'Regular Bidding' | 'SVP' | 'Attendance Sheets' | 'Receipt' | 'Others';
-    projectName?: string;
-    division?: string; // Stores the Division Abbreviation or Name (User requested Dropdown reflecting this)
-    procurementDate?: string; // New: Date Published / Procurement Date (ISO)
+    division?: string; // "End User"
+
+    procurementDate?: string; // Alias for publishedDate if needed
     disposalDate?: string;
 
-    checklist?: Partial<ProcurementChecklist>;
+    checklist?: ProcurementChecklist;
 
     // Borrower tracking
     borrowedBy?: string;
-    borrowerDivision?: string; // New: Division of the borrower, separate from file division
+    borrowerDivision?: string;
     borrowedDate?: string;
     returnDate?: string;
-    returnedBy?: string; // New: Name of the person who returned the file
+    returnedBy?: string;
 
-    // Stack number (position in folder, only for 'archived'/Available files)
+    // Stack number
     stackNumber?: number;
-    stackOrderDate?: number; // Timestamp for consistent stack ordering
+    stackOrderDate?: number;
 
-    // Optional metadata
     tags: string[];
-    notes?: string;
 
     // User tracking
     createdBy: string;
-    createdByName: string;
+    createdByName: string; // "Staff Incharge"
     editedBy?: string;
     editedByName?: string;
     lastEditedAt?: string;
