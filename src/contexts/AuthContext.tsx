@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState } from '@/types/procurement';
-import { getStoredUser, setStoredUser, ensureAdminUser } from '@/lib/storage';
+import { getStoredUser, setStoredUser } from '@/lib/storage';
 import { db } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
 
@@ -18,8 +18,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const initAuth = async () => {
-      // 1. Seed Admin User if needed
-      await ensureAdminUser();
+
 
       // 2. Check Local Storage
       const storedUser = getStoredUser();

@@ -322,12 +322,13 @@ export const deleteBox = async (id: string): Promise<void> => {
 };
 
 // --- Division ---
-export const addDivision = async (name: string, abbreviation: string): Promise<Division> => {
+export const addDivision = async (name: string, abbreviation: string, endUser?: string): Promise<Division> => {
     const id = crypto.randomUUID();
     const newDivision: Division = {
         id,
         name: name.trim(),
         abbreviation: abbreviation.trim().toUpperCase(),
+        endUser: endUser?.trim(),
         createdAt: new Date().toISOString(),
     };
     await set(ref(db, 'divisions/' + id), newDivision);
@@ -418,7 +419,7 @@ export const addProcurement = async (
         createdByName: userName,
         createdAt: now,
         updatedAt: now,
-        progressStatus: safeProcurement.progressStatus || 'Not yet Acted',
+        procurementStatus: safeProcurement.procurementStatus || 'Not yet Acted',
         // If adding directly to stack (archived), set stackOrderDate
         ...(safeProcurement.status === 'archived' ? { stackOrderDate: Date.now() } : {}),
     };
@@ -632,32 +633,4 @@ export const updateUser = async (id: string, updates: Partial<User>): Promise<vo
 
 export const deleteUser = async (id: string): Promise<void> => {
     await remove(ref(db, `users/${id}`));
-};
-
-export const ensureAdminUser = async () => {
-    const usersRef = ref(db, 'users');
-    const snapshot = await get(usersRef);
-    let adminExists = false;
-
-    if (snapshot.exists()) {
-        const users = Object.values(snapshot.val()) as User[];
-        // Check for admin email (case insensitive)
-        if (users.some(u => u.email.toLowerCase() === 'admin@gmail.com')) {
-            adminExists = true;
-        }
-    }
-
-    if (!adminExists) {
-        const adminUser: User = {
-            id: crypto.randomUUID(),
-            name: 'System Admin',
-            email: 'admin@gmail.com',
-            password: 'Cosmiano123@',
-            role: 'admin',
-            status: 'active',
-            createdAt: new Date().toISOString()
-        };
-        await set(ref(db, `users/${adminUser.id}`), adminUser);
-        console.log('Seeded Admin User: admin@gmail.com');
-    }
 };

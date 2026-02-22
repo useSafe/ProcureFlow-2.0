@@ -1,7 +1,8 @@
 // [Removed ProgressStatus - Legacy]
 
-
 // Location Hierarchy Types
+export type ProcurementStatus = 'active' | 'archived';
+export type UrgencyLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 export interface Cabinet {
     id: string;
     name: string;
@@ -45,6 +46,7 @@ export interface Division {
     id: string;
     name: string;
     abbreviation: string; // e.g., "IT", "HR"
+    endUser?: string; // Responsible person/head
     createdAt: string;
 }
 
@@ -155,7 +157,7 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: 'admin' | 'user';
+    role: 'admin' | 'bac-staff' | 'archiver' | 'viewer';
     status: 'active' | 'inactive';
     password?: string;
     createdAt?: string;

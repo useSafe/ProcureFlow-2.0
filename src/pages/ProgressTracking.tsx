@@ -3,7 +3,7 @@ import { useData } from '@/contexts/DataContext';
 import { Procurement } from '@/types/procurement';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     Select,
     SelectContent,
@@ -38,33 +38,11 @@ import {
     Check
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { CHECKLIST_ITEMS } from '@/lib/constants';
 
 // ─── Checklist Items (from AddProcurement) ────────────────────────────────────
 
-const checklistItems = [
-    { key: 'noticeToProceed', label: 'A. Notice to Proceed' },
-    { key: 'biddersTechFinancialProposals', label: 'L. Bidders Technical and Financial Proposals' },
-    { key: 'contractOfAgreement', label: 'B. Contract of Agreement' },
-    { key: 'minutesPreBid', label: 'M. Minutes of Pre-Bid Conference' },
-    { key: 'noticeOfAward', label: 'C. Notice of Award' },
-    { key: 'biddingDocuments', label: 'N. Bidding Documents' },
-    { key: 'bacResolutionAward', label: 'D. BAC Resolution to Award' },
-    { key: 'inviteObservers', label: 'O.1. Letter Invitation to Observers' },
-    { key: 'postQualReport', label: 'E. Post-Qual Evaulation Report' },
-    { key: 'officialReceipt', label: 'O.2. Official Receipt' },
-    { key: 'noticePostQual', label: 'F. Notice of Post-qualification' },
-    { key: 'boardResolution', label: 'O.3. Board Resolution' },
-    { key: 'bacResolutionPostQual', label: 'G. BAC Resolution to Post-qualify' },
-    { key: 'philgepsAwardNotice', label: 'O.4. PhilGEPS Award Notice Abstract' },
-    { key: 'abstractBidsEvaluated', label: 'H. Abstract of Bids as Evaluated' },
-    { key: 'philgepsPosting', label: 'P.1. PhilGEPS Posting' },
-    { key: 'twgBidEvalReport', label: 'I. TWG Bid Evaluation Report' },
-    { key: 'websitePosting', label: 'P.2. Website Posting' },
-    { key: 'minutesBidOpening', label: 'J. Minutes of Bid Opening' },
-    { key: 'postingCertificate', label: 'P.3. Posting Certificate' },
-    { key: 'resultEligibilityCheck', label: 'K. Eligibility Check Results' },
-    { key: 'fundsAvailability', label: 'Q. CAF, PR, TOR & APP' },
-];
+const checklistItems = CHECKLIST_ITEMS;
 
 // ─── Phase Definitions ────────────────────────────────────────────────────────
 
@@ -77,30 +55,30 @@ interface Phase {
 }
 
 const REGULAR_PHASES: Phase[] = [
-    { key: 'receivedPrDate', label: 'Received PR', shortLabel: 'Recv PR', icon: Inbox, dateField: 'receivedPrDate' },
+    { key: 'receivedPrDate', label: 'Received PR to Action', shortLabel: 'Recv PR', icon: Inbox, dateField: 'receivedPrDate' },
     { key: 'prDeliberatedDate', label: 'PR Deliberated', shortLabel: 'PR Delib', icon: ClipboardList, dateField: 'prDeliberatedDate' },
     { key: 'publishedDate', label: 'Published', shortLabel: 'Published', icon: FileText, dateField: 'publishedDate' },
     { key: 'preBidDate', label: 'Pre-Bid', shortLabel: 'Pre-Bid', icon: BookOpen, dateField: 'preBidDate' },
     { key: 'bidOpeningDate', label: 'Bid Opening', shortLabel: 'Bid Open', icon: Gavel, dateField: 'bidOpeningDate' },
-    { key: 'bidEvaluationDate', label: 'Bid Evaluation', shortLabel: 'Bid Eval', icon: ListChecks, dateField: 'bidEvaluationDate' },
-    { key: 'postQualDate', label: 'Post-Qualification', shortLabel: 'Post-Qual', icon: ShieldCheck, dateField: 'postQualDate' },
-    { key: 'postQualReportDate', label: 'Post-Qual Report', shortLabel: 'PQ Report', icon: ScrollText, dateField: 'postQualReportDate' },
+    { key: 'bidEvaluationDate', label: 'Bid Evaluation Report', shortLabel: 'Bid Eval', icon: ListChecks, dateField: 'bidEvaluationDate' },
     { key: 'bacResolutionDate', label: 'BAC Resolution', shortLabel: 'BAC Res', icon: FileCheck, dateField: 'bacResolutionDate' },
-    { key: 'noaDate', label: 'NOA', shortLabel: 'NOA', icon: Award, dateField: 'noaDate' },
-    { key: 'contractDate', label: 'Contract Date', shortLabel: 'Contract', icon: ScrollText, dateField: 'contractDate' },
-    { key: 'ntpDate', label: 'NTP', shortLabel: 'NTP', icon: Send, dateField: 'ntpDate' },
+    { key: 'postQualDate', label: 'Post Qualification', shortLabel: 'Post-Qual', icon: ShieldCheck, dateField: 'postQualDate' },
+    { key: 'postQualReportDate', label: 'Post Qualification Report', shortLabel: 'PQ Report', icon: ScrollText, dateField: 'postQualReportDate' },
     { key: 'forwardedOapiDate', label: 'Forwarded to OAPIA', shortLabel: 'To OAPIA', icon: Building2, dateField: 'forwardedOapiDate' },
+    { key: 'noaDate', label: 'Notice of Award', shortLabel: 'NOA', icon: Award, dateField: 'noaDate' },
+    { key: 'contractDate', label: 'Contract Date', shortLabel: 'Contract', icon: ScrollText, dateField: 'contractDate' },
+    { key: 'ntpDate', label: 'Notice to Proceed', shortLabel: 'NTP', icon: Send, dateField: 'ntpDate' },
     { key: 'awardedToDate', label: 'Awarded to Supplier', shortLabel: 'Awarded', icon: BadgeCheck, dateField: 'awardedToDate' },
 ];
 
 const SVP_PHASES: Phase[] = [
-    { key: 'receivedPrDate', label: 'Received PR', shortLabel: 'Recv PR', icon: Inbox, dateField: 'receivedPrDate' },
+    { key: 'receivedPrDate', label: 'Received PR to Action', shortLabel: 'Recv PR', icon: Inbox, dateField: 'receivedPrDate' },
     { key: 'prDeliberatedDate', label: 'PR Deliberated', shortLabel: 'PR Delib', icon: ClipboardList, dateField: 'prDeliberatedDate' },
     { key: 'publishedDate', label: 'Published', shortLabel: 'Published', icon: FileText, dateField: 'publishedDate' },
-    { key: 'rfqCanvassDate', label: 'RFQ for Canvass', shortLabel: 'RFQ Canv', icon: BookOpen, dateField: 'rfqCanvassDate' },
+    { key: 'rfqCanvassDate', label: 'RFQ to Canvass', shortLabel: 'RFQ Canv', icon: BookOpen, dateField: 'rfqCanvassDate' },
     { key: 'rfqOpeningDate', label: 'RFQ Opening', shortLabel: 'RFQ Open', icon: Gavel, dateField: 'rfqOpeningDate' },
     { key: 'bacResolutionDate', label: 'BAC Resolution', shortLabel: 'BAC Res', icon: FileCheck, dateField: 'bacResolutionDate' },
-    { key: 'forwardedGsdDate', label: 'Forwarded to GSD', shortLabel: 'To GSD', icon: PackageCheck, dateField: 'forwardedGsdDate' },
+    { key: 'forwardedGsdDate', label: 'Forwarded to GSD for P.O', shortLabel: 'To GSD', icon: PackageCheck, dateField: 'forwardedGsdDate' },
 ];
 
 // ─── Status Color Helpers ─────────────────────────────────────────────────────
@@ -156,10 +134,8 @@ const getCurrentPhaseIndex = (p: Procurement, phases: Phase[]): number => {
 const ChecklistDialog = ({ procurement, open, onClose }: { procurement: Procurement | null; open: boolean; onClose: () => void }) => {
     if (!procurement) return null;
 
-    // Filter only attached documents (checked items)
-    const attachedDocs = checklistItems.filter(item =>
-        procurement.checklist && procurement.checklist[item.key] === true
-    );
+    // Use default checklist items
+    const allItems = checklistItems;
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
@@ -171,26 +147,30 @@ const ChecklistDialog = ({ procurement, open, onClose }: { procurement: Procurem
                     </DialogTitle>
                 </DialogHeader>
                 <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {attachedDocs.length === 0 ? (
-                        <div className="text-center py-8 text-slate-500 col-span-1 md:col-span-2">
-                            <FileText className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                            <p>No attached documents found.</p>
-                        </div>
-                    ) : (
-                        attachedDocs.map((item) => (
+                    {allItems.map((item) => {
+                        const isAttached = procurement.checklist && procurement.checklist[item.key] === true;
+                        return (
                             <div
                                 key={item.key}
-                                className="flex items-center gap-3 p-3 rounded-lg border bg-green-500/10 border-green-500/20"
+                                className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${isAttached
+                                    ? 'bg-green-500/10 border-green-500/20'
+                                    : 'bg-slate-800/30 border-slate-800 opacity-60'
+                                    }`}
                             >
-                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
-                                    <Check className="h-3.5 w-3.5 text-green-400" />
+                                <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${isAttached ? 'bg-green-500/20' : 'bg-slate-700'
+                                    }`}>
+                                    {isAttached ? (
+                                        <Check className="h-3.5 w-3.5 text-green-400" />
+                                    ) : (
+                                        <div className="h-2 w-2 rounded-full bg-slate-500" />
+                                    )}
                                 </div>
-                                <span className="text-sm font-medium text-white">
+                                <span className={`text-sm font-medium ${isAttached ? 'text-white' : 'text-slate-400'}`}>
                                     {item.label}
                                 </span>
                             </div>
-                        ))
-                    )}
+                        );
+                    })}
                 </div>
             </DialogContent>
         </Dialog>
@@ -253,7 +233,7 @@ const PhasePipeline = ({ procurement }: { procurement: Procurement }) => {
 
 // ─── Procurement Card ─────────────────────────────────────────────────────────
 
-const ProcurementCard = ({ procurement, onViewChecklist }: { procurement: Procurement; onViewChecklist: (p: Procurement) => void }) => {
+const ProcurementCard = ({ procurement, onViewChecklist, onViewRecord }: { procurement: Procurement; onViewChecklist: (p: Procurement) => void; onViewRecord: (prNumber: string) => void }) => {
     const phases = procurement.procurementType === 'SVP' ? SVP_PHASES : REGULAR_PHASES;
     const currentIdx = getCurrentPhaseIndex(procurement, phases);
     const currentPhaseName = currentIdx >= 0 ? phases[currentIdx].label : 'Not yet Acted';
@@ -304,6 +284,15 @@ const ProcurementCard = ({ procurement, onViewChecklist }: { procurement: Procur
                         <ClipboardList className="h-4 w-4 mr-2" />
                         Attached Documents
                     </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onViewRecord(procurement.prNumber)}
+                        className="h-9 border-slate-700 bg-blue-600/20 text-blue-300 hover:bg-blue-600/40 hover:text-white transition-colors"
+                    >
+                        <FileText className="h-4 w-4 mr-2" />
+                        View Record
+                    </Button>
                 </div>
             </div>
 
@@ -327,6 +316,7 @@ const ITEMS_PER_PAGE = 10;
 const ProgressTracking: React.FC = () => {
     const { procurements } = useData();
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -467,6 +457,7 @@ const ProgressTracking: React.FC = () => {
                             key={p.id}
                             procurement={p}
                             onViewChecklist={setChecklistProcurement}
+                            onViewRecord={(prNum) => navigate(`/procurement/list?search=${encodeURIComponent(prNum)}`)}
                         />
                     ))
                 )}

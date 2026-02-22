@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Layers, Package, Folder as FolderIcon, FileText, ChevronRight, ArrowLeft, Archive, Grid } from 'lucide-react';
+import { Layers, Package, Folder as FolderIcon, FileText, ChevronRight, ArrowLeft, Archive, Grid, Inbox, ClipboardList, BookOpen, Gavel, ListChecks, ShieldCheck, ScrollText, FileCheck, Award, Send, Building2, BadgeCheck, PackageCheck } from 'lucide-react';
 import { Cabinet, Shelf, Folder, Procurement, Box } from '@/types/procurement';
 import { format } from 'date-fns';
+import { CHECKLIST_ITEMS } from '@/lib/constants';
 import {
     Dialog,
     DialogContent,
@@ -12,6 +13,133 @@ import {
     DialogTitle,
     DialogDescription,
 } from '@/components/ui/dialog';
+
+// ─── Phase Definitions & Helpers (Copied from ProgressTracking) ────────────────
+
+interface Phase {
+    key: string;
+    label: string;
+    shortLabel: string;
+    icon: React.ElementType;
+    dateField: keyof Procurement;
+}
+
+const REGULAR_PHASES: Phase[] = [
+    { key: 'receivedPrDate', label: 'Received PR', shortLabel: 'Recv PR', icon: Inbox, dateField: 'receivedPrDate' },
+    { key: 'prDeliberatedDate', label: 'PR Deliberated', shortLabel: 'PR Delib', icon: ClipboardList, dateField: 'prDeliberatedDate' },
+    { key: 'publishedDate', label: 'Published', shortLabel: 'Published', icon: FileText, dateField: 'publishedDate' },
+    { key: 'preBidDate', label: 'Pre-Bid', shortLabel: 'Pre-Bid', icon: BookOpen, dateField: 'preBidDate' },
+    { key: 'bidOpeningDate', label: 'Bid Opening', shortLabel: 'Bid Open', icon: Gavel, dateField: 'bidOpeningDate' },
+    { key: 'bidEvaluationDate', label: 'Bid Evaluation', shortLabel: 'Bid Eval', icon: ListChecks, dateField: 'bidEvaluationDate' },
+    { key: 'postQualDate', label: 'Post-Qualification', shortLabel: 'Post-Qual', icon: ShieldCheck, dateField: 'postQualDate' },
+    { key: 'postQualReportDate', label: 'Post-Qual Report', shortLabel: 'PQ Report', icon: ScrollText, dateField: 'postQualReportDate' },
+    { key: 'bacResolutionDate', label: 'BAC Resolution', shortLabel: 'BAC Res', icon: FileCheck, dateField: 'bacResolutionDate' },
+    { key: 'noaDate', label: 'NOA', shortLabel: 'NOA', icon: Award, dateField: 'noaDate' },
+    { key: 'contractDate', label: 'Contract Date', shortLabel: 'Contract', icon: ScrollText, dateField: 'contractDate' },
+    { key: 'ntpDate', label: 'NTP', shortLabel: 'NTP', icon: Send, dateField: 'ntpDate' },
+    { key: 'forwardedOapiDate', label: 'Forwarded to OAPIA', shortLabel: 'To OAPIA', icon: Building2, dateField: 'forwardedOapiDate' },
+    { key: 'awardedToDate', label: 'Awarded to Supplier', shortLabel: 'Awarded', icon: BadgeCheck, dateField: 'awardedToDate' },
+];
+
+const SVP_PHASES: Phase[] = [
+    { key: 'receivedPrDate', label: 'Received PR', shortLabel: 'Recv PR', icon: Inbox, dateField: 'receivedPrDate' },
+    { key: 'prDeliberatedDate', label: 'PR Deliberated', shortLabel: 'PR Delib', icon: ClipboardList, dateField: 'prDeliberatedDate' },
+    { key: 'publishedDate', label: 'Published', shortLabel: 'Published', icon: FileText, dateField: 'publishedDate' },
+    { key: 'rfqCanvassDate', label: 'RFQ for Canvass', shortLabel: 'RFQ Canv', icon: BookOpen, dateField: 'rfqCanvassDate' },
+    { key: 'rfqOpeningDate', label: 'RFQ Opening', shortLabel: 'RFQ Open', icon: Gavel, dateField: 'rfqOpeningDate' },
+    { key: 'bacResolutionDate', label: 'BAC Resolution', shortLabel: 'BAC Res', icon: FileCheck, dateField: 'bacResolutionDate' },
+    { key: 'forwardedGsdDate', label: 'Forwarded to GSD', shortLabel: 'To GSD', icon: PackageCheck, dateField: 'forwardedGsdDate' },
+];
+
+// Phase circle color based on completion
+const getPhaseColor = (completed: boolean, isCurrent: boolean, status: string) => {
+    if (!completed) return { circle: 'bg-slate-800 border-slate-700', icon: 'text-slate-600', connector: 'bg-slate-700' };
+
+    // Use pure colors for active phases
+    if (status === 'Completed') {
+        return { circle: 'bg-green-500/20 border-green-500', icon: 'text-green-400', connector: 'bg-green-500/60' };
+    }
+    if (status === 'In Progress') {
+        return {
+            circle: isCurrent
+                ? 'bg-yellow-400/30 border-yellow-400 ring-4 ring-yellow-400/20'
+                : 'bg-yellow-400/15 border-yellow-400/60',
+            icon: isCurrent ? 'text-yellow-300' : 'text-yellow-400',
+            connector: 'bg-yellow-400/50'
+        };
+    }
+    if (status === 'Returned PR to EU') {
+        return { circle: 'bg-purple-500/20 border-purple-500', icon: 'text-purple-400', connector: 'bg-purple-500/50' };
+    }
+    if (status === 'Failure') {
+        return { circle: 'bg-red-500/20 border-red-500', icon: 'text-red-400', connector: 'bg-red-500/50' };
+    }
+    if (status === 'Cancelled') {
+        return { circle: 'bg-orange-500/20 border-orange-500', icon: 'text-orange-400', connector: 'bg-orange-500/50' };
+    }
+    return { circle: 'bg-blue-500/20 border-blue-500', icon: 'text-blue-400', connector: 'bg-blue-500/50' };
+};
+
+const getCurrentPhaseIndex = (p: Procurement, phases: Phase[]): number => {
+    let lastCompleted = -1;
+    phases.forEach((phase, i) => {
+        if (p[phase.dateField]) lastCompleted = i;
+    });
+    return lastCompleted;
+};
+
+// Phase Pipeline Component
+const PhasePipeline = ({ procurement }: { procurement: Procurement }) => {
+    const phases = procurement.procurementType === 'SVP' ? SVP_PHASES : REGULAR_PHASES;
+    const currentIdx = getCurrentPhaseIndex(procurement, phases);
+    const effectiveStatus = procurement.procurementStatus || 'Not yet Acted';
+
+    return (
+        <div className="flex items-center gap-0 w-full overflow-x-auto min-w-0 py-4 px-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+            {phases.map((phase, i) => {
+                const completed = !!procurement[phase.dateField];
+                const isCurrent = i === currentIdx;
+                const colors = getPhaseColor(completed, isCurrent, effectiveStatus);
+                const Icon = phase.icon;
+                const dateVal = procurement[phase.dateField] as string | undefined;
+
+                return (
+                    <React.Fragment key={phase.key}>
+                        {/* Phase Circle */}
+                        <div className="flex flex-col items-center flex-shrink-0 group relative px-1">
+                            <div
+                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 shadow-lg ${colors.circle} ${isCurrent ? 'scale-110' : 'scale-100'}`}
+                            >
+                                <Icon className={`h-4 w-4 ${colors.icon}`} strokeWidth={2} />
+                            </div>
+
+                            {/* Label */}
+                            <div className={`mt-2 text-center transition-opacity flex flex-col items-center
+                                ${completed || isCurrent ? 'opacity-100' : 'opacity-60 grayscale group-hover:opacity-100 group-hover:grayscale-0'}
+                            `}>
+                                <span className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${completed ? 'text-slate-300' : 'text-slate-500'}`}>
+                                    {phase.shortLabel}
+                                </span>
+                                {dateVal && (
+                                    <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">
+                                        {format(new Date(dateVal), 'MMM d')}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Connector Arrow */}
+                        {i < phases.length - 1 && (
+                            <div className="flex items-center flex-1 min-w-[20px] -mt-6 mx-0.5">
+                                <div className={`h-0.5 w-full rounded-full transition-all duration-500 ${completed && !!procurement[phases[i + 1].dateField] ? colors.connector : 'bg-slate-700/50'}`} />
+                            </div>
+                        )}
+                    </React.Fragment>
+                );
+            })}
+        </div>
+    );
+};
 
 const VisualAllocation: React.FC = () => {
     // Data Context
@@ -46,7 +174,17 @@ const VisualAllocation: React.FC = () => {
     // Box (B1) -> Folder (F1): Folder.boxId === Box.id
     const getFoldersForBox = (boxId: string) => sortedFolders.filter(f => f.boxId === boxId);
 
-    const getFilesForFolder = (folderId: string) => procurements.filter(p => p.folderId === folderId).sort((a, b) => (a.prNumber || '').localeCompare(b.prNumber || '', undefined, { numeric: true }));
+    const getFilesForFolder = (folderId: string) => procurements
+        .filter(p => p.folderId === folderId)
+        .sort((a, b) => {
+            // Sort by Stack Number Descending (Highest on top/first)
+            if (a.stackNumber && b.stackNumber) return b.stackNumber - a.stackNumber;
+            // Files with stack numbers come before files without
+            if (a.stackNumber) return -1;
+            if (b.stackNumber) return 1;
+            // Fallback to PR Number
+            return (a.prNumber || '').localeCompare(b.prNumber || '', undefined, { numeric: true });
+        });
     // Legacy support or direct files in box (optional, but hierarchy is Box->Folder->File now)
     const getFilesForBox = (boxId: string) => procurements.filter(p => p.boxId === boxId && !p.folderId).sort((a, b) => (a.prNumber || '').localeCompare(b.prNumber || '', undefined, { numeric: true }));
 
@@ -125,7 +263,7 @@ const VisualAllocation: React.FC = () => {
                         </Button>
                     </>
                 )}
-                {selectedFolderId && (
+                {selectedFolderId && !selectedBoxId && (
                     <>
                         <ChevronRight className="h-4 w-4" />
                         <span className="text-white">{currentFolder?.code}</span>
@@ -143,6 +281,12 @@ const VisualAllocation: React.FC = () => {
                         <Button variant="ghost" className="p-0 h-auto hover:bg-transparent hover:text-white" onClick={() => { setViewMode('box_folders'); setSelectedFolderId(null); }}>
                             {currentBox?.code}
                         </Button>
+                        {selectedFolderId && (
+                            <>
+                                <ChevronRight className="h-4 w-4" />
+                                <span className="text-white">{currentFolder?.code}</span>
+                            </>
+                        )}
                     </>
                 )}
                 {/* Note: Files breadcrumb for Box mode handled by generic 'selectedFolderId' check above if we want, or we can explicit it here */}
@@ -457,7 +601,7 @@ const VisualAllocation: React.FC = () => {
 
             {/* File Details Modal */}
             <Dialog open={!!selectedFile} onOpenChange={(open) => !open && setSelectedFile(null)}>
-                <DialogContent className="bg-[#0f172a] border-slate-800 text-white max-w-lg">
+                <DialogContent className="bg-[#0f172a] border-slate-800 text-white max-w-3xl">
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                             <FileText className="h-6 w-6 text-blue-500" />
@@ -480,12 +624,18 @@ const VisualAllocation: React.FC = () => {
                                 </div>
                                 <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
                                     <h3 className="text-xs font-medium text-slate-500 mb-1 uppercase">Progress</h3>
-                                    <p className={`font-medium ${selectedFile.progressStatus === 'Success' ? 'text-emerald-400' :
-                                        selectedFile.progressStatus === 'Failed' ? 'text-red-400' :
+                                    <p className={`font-medium ${selectedFile.procurementStatus === 'Completed' ? 'text-emerald-400' :
+                                        (selectedFile.procurementStatus === 'Failure' || selectedFile.procurementStatus === 'Cancelled') ? 'text-red-400' :
                                             'text-yellow-400'
                                         }`}>
-                                        {selectedFile.progressStatus || 'Pending'}
+                                        {selectedFile.procurementStatus || 'Not yet Acted'}
                                     </p>
+                                </div>
+                                <div className="col-span-2 p-3 bg-slate-900 rounded-lg border border-slate-800">
+                                    <h3 className="text-xs font-medium text-slate-500 mb-2 uppercase">Procurement Progress</h3>
+                                    <div className="bg-slate-950/50 rounded-lg p-2 border border-slate-800/50">
+                                        <PhasePipeline procurement={selectedFile} />
+                                    </div>
                                 </div>
                                 <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
                                     <h3 className="text-xs font-medium text-slate-500 mb-1 uppercase">Division</h3>
@@ -504,8 +654,39 @@ const VisualAllocation: React.FC = () => {
                             {/* Main Info */}
                             <div className="space-y-4">
                                 <div className="p-4 bg-slate-900 rounded-lg border border-slate-800">
-                                    <h3 className="text-sm font-medium text-slate-500 mb-2">Description</h3>
-                                    <p className="text-white leading-relaxed">{selectedFile.description}</p>
+                                    <h3 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
+                                        <Grid className="h-4 w-4 text-blue-500" />
+                                        Project Details
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div className="col-span-2">
+                                            <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Project Title</span>
+                                            <span className="text-sm text-white font-medium">{selectedFile.projectName || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Procurement Type</span>
+                                            <span className="text-sm text-white font-medium bg-slate-800 px-2 py-0.5 rounded border border-slate-700">{selectedFile.procurementType || 'N/A'}</span>
+                                        </div>
+                                        <div className="col-span-2 sm:col-span-1">
+                                            <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Supplier Name</span>
+                                            <span className="text-sm text-white font-medium">{selectedFile.supplier || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">ABC</span>
+                                            <span className="text-sm text-emerald-400 font-mono font-bold bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-900/50">
+                                                {selectedFile.abc ? `₱${selectedFile.abc.toLocaleString()}` : 'N/A'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Bid Amount</span>
+                                            <span className="text-sm text-amber-400 font-mono font-bold bg-amber-950/30 px-2 py-0.5 rounded border border-amber-900/50">
+                                                {selectedFile.bidAmount ? `₱${selectedFile.bidAmount.toLocaleString()}` : 'N/A'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <h3 className="text-[10px] uppercase font-bold text-slate-500 mt-4 mb-2 border-t border-slate-800 pt-3">Description</h3>
+                                    <p className="text-white text-sm leading-relaxed">{selectedFile.description}</p>
                                 </div>
 
                                 <div className="p-4 bg-slate-900 rounded-lg border border-slate-800">
@@ -556,30 +737,7 @@ const VisualAllocation: React.FC = () => {
                                 <div>
                                     <h3 className="text-sm font-medium text-slate-400 mb-2">Documents</h3>
                                     <div className="grid grid-cols-1 gap-1 text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800 max-h-[150px] overflow-y-auto">
-                                        {[
-                                            { key: 'noticeToProceed', label: 'A. Notice to Proceed' },
-                                            { key: 'contractOfAgreement', label: 'B. Contract of Agreement' },
-                                            { key: 'noticeOfAward', label: 'C. Notice of Award' },
-                                            { key: 'bacResolutionAward', label: 'D. BAC Resolution to Award' },
-                                            { key: 'postQualReport', label: 'E. Post-Qual Report' },
-                                            { key: 'noticePostQual', label: 'F. Notice of Post-qualification' },
-                                            { key: 'bacResolutionPostQual', label: 'G. BAC Resolution to Post-qualify' },
-                                            { key: 'abstractBidsEvaluated', label: 'H. Abstract of Bids as Evaluated' },
-                                            { key: 'twgBidEvalReport', label: 'I. TWG Bid Evaluation Report' },
-                                            { key: 'minutesBidOpening', label: 'J. Minutes of Bid Opening' },
-                                            { key: 'resultEligibilityCheck', label: 'K. Eligibility Check Results' },
-                                            { key: 'biddersTechFinancialProposals', label: 'L. Bidders Technical and Financial Proposals' },
-                                            { key: 'minutesPreBid', label: 'M. Minutes of Pre-Bid Conference' },
-                                            { key: 'biddingDocuments', label: 'N. Bidding Documents' },
-                                            { key: 'inviteObservers', label: 'O.1. Letter Invitation to Observers' },
-                                            { key: 'officialReceipt', label: 'O.2. Official Receipt' },
-                                            { key: 'boardResolution', label: 'O.3. Board Resolution' },
-                                            { key: 'philgepsAwardNotice', label: 'O.4. PhilGEPS Award Notice Abstract' },
-                                            { key: 'philgepsPosting', label: 'P.1. PhilGEPS Posting' },
-                                            { key: 'websitePosting', label: 'P.2. Website Posting' },
-                                            { key: 'postingCertificate', label: 'P.3. Posting Certificate' },
-                                            { key: 'fundsAvailability', label: 'Q. CAF, PR, TOR & APP' },
-                                        ].map((item) => {
+                                        {CHECKLIST_ITEMS.map((item) => {
                                             if (selectedFile.checklist?.[item.key as keyof typeof selectedFile.checklist]) {
                                                 return (
                                                     <div key={item.key} className="flex items-center gap-2">

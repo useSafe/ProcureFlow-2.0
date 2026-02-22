@@ -65,7 +65,7 @@ const UserManagement: React.FC = () => {
 
     // Filter State
     const [searchQuery, setSearchQuery] = useState('');
-    const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+    const [roleFilter, setRoleFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
     // Modal State
@@ -80,7 +80,7 @@ const UserManagement: React.FC = () => {
         name: '',
         email: '',
         password: '',
-        role: 'user' as 'admin' | 'user',
+        role: 'user' as 'admin' | 'bac-staff' | 'archiver' | 'viewer' | 'user',
         status: 'active' as 'active' | 'inactive'
     });
 
@@ -351,7 +351,9 @@ const UserManagement: React.FC = () => {
                                 <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
                                     <SelectItem value="all">All Roles</SelectItem>
                                     <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="user">User</SelectItem>
+                                    <SelectItem value="bac-staff">BAC Staff</SelectItem>
+                                    <SelectItem value="archiver">Archiver</SelectItem>
+                                    <SelectItem value="viewer">Viewer</SelectItem>
                                 </SelectContent>
                             </Select>
                             <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
@@ -388,15 +390,40 @@ const UserManagement: React.FC = () => {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {user.role === 'admin' ? (
-                                                <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20">
-                                                    <Shield className="w-3 h-3 mr-1" /> Admin
-                                                </Badge>
-                                            ) : (
-                                                <Badge className="bg-slate-500/10 text-slate-400 border-slate-500/20 hover:bg-slate-500/20">
-                                                    User
-                                                </Badge>
-                                            )}
+                                            {(() => {
+                                                switch (user.role) {
+                                                    case 'admin':
+                                                        return (
+                                                            <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20">
+                                                                <Shield className="w-3 h-3 mr-1" /> Admin
+                                                            </Badge>
+                                                        );
+                                                    case 'bac-staff':
+                                                        return (
+                                                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20">
+                                                                <Shield className="w-3 h-3 mr-1" /> BAC Staff
+                                                            </Badge>
+                                                        );
+                                                    case 'viewer':
+                                                        return (
+                                                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20">
+                                                                <UserIcon className="w-3 h-3 mr-1" /> Viewer
+                                                            </Badge>
+                                                        );
+                                                    case 'archiver':
+                                                        return (
+                                                            <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20">
+                                                                <Shield className="w-3 h-3 mr-1" /> Archiver
+                                                            </Badge>
+                                                        );
+                                                    default:
+                                                        return (
+                                                            <Badge className="bg-slate-500/10 text-slate-400 border-slate-500/20 hover:bg-slate-500/20">
+                                                                <UserIcon className="w-3 h-3 mr-1" /> User
+                                                            </Badge>
+                                                        );
+                                                }
+                                            })()}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
@@ -615,11 +642,25 @@ const UserManagement: React.FC = () => {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-[#0f172a] border-slate-700 text-white">
-                                    <SelectItem value="user">
+                                    <SelectItem value="bac-staff">
+                                        <div className="flex items-center gap-2">
+                                            <Shield className="h-4 w-4" />
+                                            <span>BAC Staff</span>
+                                            <span className="text-xs text-slate-400">- Procurement Access</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="archiver">
+                                        <div className="flex items-center gap-2">
+                                            <Shield className="h-4 w-4" />
+                                            <span>Archiver</span>
+                                            <span className="text-xs text-slate-400">- Storage Access</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="viewer">
                                         <div className="flex items-center gap-2">
                                             <UserIcon className="h-4 w-4" />
-                                            <span>User</span>
-                                            <span className="text-xs text-slate-400">- Standard Access</span>
+                                            <span>Viewer</span>
+                                            <span className="text-xs text-slate-400">- Read Only</span>
                                         </div>
                                     </SelectItem>
                                     <SelectItem value="admin">
@@ -821,11 +862,25 @@ const UserManagement: React.FC = () => {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="bg-[#0f172a] border-slate-700 text-white">
-                                    <SelectItem value="user">
+                                    <SelectItem value="bac-staff">
+                                        <div className="flex items-center gap-2">
+                                            <Shield className="h-4 w-4" />
+                                            <span>BAC Staff</span>
+                                            <span className="text-xs text-slate-400">- Procurement Access</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="archiver">
+                                        <div className="flex items-center gap-2">
+                                            <Shield className="h-4 w-4" />
+                                            <span>Archiver</span>
+                                            <span className="text-xs text-slate-400">- Storage Access</span>
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="viewer">
                                         <div className="flex items-center gap-2">
                                             <UserIcon className="h-4 w-4" />
-                                            <span>User</span>
-                                            <span className="text-xs text-slate-400">- Standard Access</span>
+                                            <span>Viewer</span>
+                                            <span className="text-xs text-slate-400">- Read Only</span>
                                         </div>
                                     </SelectItem>
                                     <SelectItem value="admin">

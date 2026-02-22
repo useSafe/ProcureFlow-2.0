@@ -199,10 +199,6 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                     <div className="space-y-6">
                                         {/* Pre-Procurement */}
                                         <div className="space-y-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-6 w-1 bg-blue-500 rounded-full"></div>
-                                                <h4 className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Pre-Procurement</h4>
-                                            </div>
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                                 <div className="space-y-1">
                                                     <label className="text-xs text-slate-500 block">Received PR</label>
@@ -221,12 +217,6 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
 
                                         {/* Bidding / Canvass */}
                                         <div className="space-y-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-6 w-1 bg-purple-500 rounded-full"></div>
-                                                <h4 className="text-xs font-semibold text-purple-400 uppercase tracking-wider">
-                                                    {procurement.procurementType === 'Regular Bidding' ? 'Bidding Proper' : 'Canvassing'}
-                                                </h4>
-                                            </div>
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                                 {procurement.procurementType === 'Regular Bidding' ? (
                                                     <>
@@ -260,31 +250,21 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
 
                                         {/* Qualification & Award */}
                                         <div className="space-y-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-6 w-1 bg-emerald-500 rounded-full"></div>
-                                                <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Qualification & Award</h4>
-                                            </div>
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                {procurement.procurementType === 'Regular Bidding' && (
+                                                {procurement.procurementType === 'Regular Bidding' ? (
                                                     <>
                                                         <div className="space-y-1">
-                                                            <label className="text-xs text-slate-500 block">Post-Qual</label>
+                                                            <label className="text-xs text-slate-500 block">Post-Qualification</label>
                                                             <p className="font-mono text-sm text-slate-200">{formatDate(procurement.postQualDate)}</p>
                                                         </div>
                                                         <div className="space-y-1">
                                                             <label className="text-xs text-slate-500 block">Post-Qual Report</label>
                                                             <p className="font-mono text-sm text-slate-200">{formatDate(procurement.postQualReportDate)}</p>
                                                         </div>
-                                                    </>
-                                                )}
-
-                                                <div className="space-y-1">
-                                                    <label className="text-xs text-slate-500 block">BAC Resolution</label>
-                                                    <p className="font-mono text-sm text-slate-200">{formatDate(procurement.bacResolutionDate)}</p>
-                                                </div>
-
-                                                {procurement.procurementType === 'Regular Bidding' && (
-                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">Forwarded to OAPIA</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.forwardedOapiDate)}</p>
+                                                        </div>
                                                         <div className="space-y-1">
                                                             <label className="text-xs text-slate-500 block">Notice of Award</label>
                                                             <p className="font-mono text-sm text-slate-200">{formatDate(procurement.noaDate)}</p>
@@ -294,14 +274,15 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                                             <p className="font-mono text-sm text-slate-200">{formatDate(procurement.contractDate)}</p>
                                                         </div>
                                                         <div className="space-y-1">
-                                                            <label className="text-xs text-slate-500 block">NTP</label>
+                                                            <label className="text-xs text-slate-500 block">Notice to Proceed (NTP)</label>
                                                             <p className="font-mono text-sm text-slate-200">{formatDate(procurement.ntpDate)}</p>
                                                         </div>
-                                                        <div className="space-y-1">
-                                                            <label className="text-xs text-slate-500 block">To OAPIA</label>
-                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.forwardedOapiDate)}</p>
-                                                        </div>
                                                     </>
+                                                ) : (
+                                                    <div className="space-y-1">
+                                                        <label className="text-xs text-slate-500 block">BAC Resolution</label>
+                                                        <p className="font-mono text-sm text-slate-200">{formatDate(procurement.bacResolutionDate)}</p>
+                                                    </div>
                                                 )}
 
                                                 {procurement.procurementType === 'Regular Bidding' ? (

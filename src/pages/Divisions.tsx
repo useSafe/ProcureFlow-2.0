@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Division } from '@/types/procurement';
+import { useData } from '@/contexts/DataContext';
 import { onDivisionsChange, addDivision, updateDivision, deleteDivision } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ import { Plus, Search, Pencil, Trash2, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Divisions: React.FC = () => {
+    const { procurements } = useData();
     const [divisions, setDivisions] = useState<Division[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -37,8 +39,13 @@ const Divisions: React.FC = () => {
 
     const [formData, setFormData] = useState({
         name: '',
-        abbreviation: ''
+        abbreviation: '',
+        endUser: ''
     });
+
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [divisionToDelete, setDivisionToDelete] = useState<Division | null>(null);
+    const [associatedFileCount, setAssociatedFileCount] = useState(0);
 
     useEffect(() => {
         const unsub = onDivisionsChange((data) => {
@@ -56,7 +63,7 @@ const Divisions: React.FC = () => {
         .sort((a, b) => a.name.localeCompare(b.name));
 
     const resetForm = () => {
-        setFormData({ name: '', abbreviation: '' });
+        setFormData({ name: '', abbreviation: '', endUser: '' });
         setSelectedDivision(null);
     };
 
@@ -67,7 +74,7 @@ const Divisions: React.FC = () => {
         }
 
         try {
-            await addDivision(formData.name, formData.abbreviation);
+            await addDivision(formData.name, formData.abbreviation, formData.endUser);
             toast.success('Division added successfully');
             setIsAddOpen(false);
             resetForm();
@@ -82,7 +89,8 @@ const Divisions: React.FC = () => {
         try {
             await updateDivision(selectedDivision.id, {
                 name: formData.name,
-                abbreviation: formData.abbreviation.toUpperCase()
+                abbreviation: formData.abbreviation.toUpperCase(),
+                endUser: formData.endUser
             });
             toast.success('Division updated successfully');
             setIsEditOpen(false);
@@ -92,14 +100,23 @@ const Divisions: React.FC = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this division?")) {
-            try {
-                await deleteDivision(id);
-                toast.success('Division deleted');
-            } catch (error) {
-                toast.error('Failed to delete division');
-            }
+    const handleDeleteClick = (division: Division) => {
+        const count = procurements.filter(p => p.division === division.name).length;
+        setAssociatedFileCount(count);
+        setDivisionToDelete(division);
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!divisionToDelete) return;
+
+        try {
+            await deleteDivision(divisionToDelete.id);
+            toast.success('Division deleted');
+            setIsDeleteModalOpen(false);
+            setDivisionToDelete(null);
+        } catch (error) {
+            toast.error('Failed to delete division');
         }
     };
 
@@ -107,7 +124,8 @@ const Divisions: React.FC = () => {
         setSelectedDivision(division);
         setFormData({
             name: division.name,
-            abbreviation: division.abbreviation
+            abbreviation: division.abbreviation,
+            endUser: division.endUser || ''
         });
         setIsEditOpen(true);
     };
@@ -143,7 +161,8 @@ const Divisions: React.FC = () => {
                         <TableHeader>
                             <TableRow className="border-slate-800 hover:bg-transparent">
                                 <TableHead className="text-slate-300">Name</TableHead>
-                                <TableHead className="text-slate-300">Abbreviation</TableHead>
+                                <TableHead className="text-slate-300">PR Number Prefix (Abbr)</TableHead>
+                                <TableHead className="text-slate-300 text-center">Total Files(As End User)</TableHead>
                                 <TableHead className="text-slate-300">Created At</TableHead>
                                 <TableHead className="text-right text-slate-300">Actions</TableHead>
                             </TableRow>
@@ -167,6 +186,9 @@ const Divisions: React.FC = () => {
                                                 {division.abbreviation}
                                             </span>
                                         </TableCell>
+                                        <TableCell className="text-slate-300 text-sm text-center font-mono">
+                                            {procurements.filter(p => p.division === division.name).length}
+                                        </TableCell>
                                         <TableCell className="text-slate-400 text-xs">
                                             {format(new Date(division.createdAt), 'MMM d, yyyy')}
                                         </TableCell>
@@ -175,7 +197,7 @@ const Divisions: React.FC = () => {
                                                 <Button variant="ghost" size="icon" onClick={() => openEdit(division)} className="h-8 w-8 text-slate-400 hover:text-white">
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDelete(division.id)} className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
+                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(division)} className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
@@ -253,10 +275,70 @@ const Divisions: React.FC = () => {
                                 className="bg-[#0f172a] border-slate-700"
                             />
                         </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-endUser">End User (Head)</Label>
+                            <Input
+                                id="edit-endUser"
+                                value={formData.endUser}
+                                onChange={(e) => setFormData({ ...formData, endUser: e.target.value })}
+                                className="bg-[#0f172a] border-slate-700"
+                            />
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>
                         <Button onClick={handleEdit} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+                <DialogContent className="bg-[#1e293b] border-slate-700 text-white">
+                    <DialogHeader>
+                        <DialogTitle>Delete Division</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            {associatedFileCount > 0
+                                ? "This division cannot be deleted."
+                                : "Are you sure you want to delete this division?"}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4">
+                        {associatedFileCount > 0 ? (
+                            <div className="bg-red-500/10 border border-red-500/20 rounded-md p-4 text-red-400 flex items-center gap-3">
+                                <Building2 className="h-5 w-5 shrink-0" />
+                                <div>
+                                    <p className="font-semibold">Cannot Delete Division</p>
+                                    <p className="text-sm mt-1">
+                                        There are <span className="font-bold text-white">{associatedFileCount}</span> file(s) associated with
+                                        <span className="font-bold text-white"> {divisionToDelete?.name}</span>.
+                                    </p>
+                                    <p className="text-xs mt-2 text-red-400/80">
+                                        Please reassign or delete these files before deleting the division.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-slate-300">
+                                You are about to delete <span className="font-bold text-white">{divisionToDelete?.name}</span>.
+                                This action cannot be undone.
+                            </p>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)} className="border-slate-700 text-white hover:bg-slate-800">
+                            Cancel
+                        </Button>
+                        {associatedFileCount === 0 && (
+                            <Button
+                                onClick={confirmDelete}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                            >
+                                Delete Division
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

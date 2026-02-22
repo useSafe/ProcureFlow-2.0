@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { db } from '@/lib/firebase';
+import { onUsersChange } from '@/lib/storage';
 import { ref, onValue } from 'firebase/database';
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogCancel,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
@@ -60,17 +61,24 @@ interface NavItem {
   path?: string;
   label: string;
   icon: any;
-  adminOnly?: boolean;
+  allowedRoles?: string[]; // if undefined, all roles see it
   children?: NavItem[];
 }
 
-// Define items with optional adminOnly flag and nested children
+// Roles: 'admin' | 'bac-staff' | 'archiver' | 'viewer'
+const ALL_ROLES = ['admin', 'bac-staff', 'archiver', 'viewer'];
+const ADMIN_ONLY = ['admin'];
+const ADMIN_BAC = ['admin', 'bac-staff'];
+const ADMIN_ARCHIVER = ['admin', 'archiver'];
+const ADMIN_BAC_VIEWER = ['admin', 'bac-staff', 'viewer'];
+
 const navItems: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/boxes', label: 'Boxes', icon: Package }, // Added Boxes
+  { path: '/boxes', label: 'Boxes', icon: Package, allowedRoles: ADMIN_ARCHIVER },
   {
     label: 'Storages',
     icon: Library,
+    allowedRoles: ADMIN_ARCHIVER,
     children: [
       { path: '/shelves', label: 'Drawers', icon: Layers },
       { path: '/cabinets', label: 'Cabinets', icon: Archive },
@@ -81,16 +89,16 @@ const navItems: NavItem[] = [
     label: 'Procurement',
     icon: FileText,
     children: [
-      { path: '/procurement/add', label: 'Add New', icon: FilePlus },
+      { path: '/procurement/add', label: 'Add New', icon: FilePlus, allowedRoles: ADMIN_BAC },
       { path: '/procurement/list', label: 'All Records', icon: FileText },
-      { path: '/procurement/svp', label: 'SVP Records', icon: FileText },
+      { path: '/procurement/svp', label: 'Small Value Procurement', icon: FileText },
       { path: '/procurement/regular', label: 'Regular Bidding', icon: FileText },
-      { path: '/procurement/progress', label: 'Progress Tracking', icon: Activity },
+      { path: '/procurement/progress', label: 'Progress Tracking', icon: Activity, allowedRoles: ADMIN_BAC_VIEWER },
     ]
   },
-  { path: '/visual-allocation', label: 'Visual Map', icon: Map },
-  { path: '/divisions', label: 'Divisions', icon: Building2, adminOnly: true }, // Added Divisions
-  { path: '/users', label: 'User Management', icon: Users, adminOnly: true },
+  { path: '/visual-allocation', label: 'Visual Map', icon: Map, allowedRoles: ['admin', 'archiver', 'bac-staff', 'viewer'] },
+  { path: '/divisions', label: 'Divisions', icon: Building2, allowedRoles: ADMIN_ONLY },
+  { path: '/users', label: 'User Management', icon: Users, allowedRoles: ADMIN_ONLY },
 ];
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
@@ -98,20 +106,40 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [forceDeleteOpen, setForceDeleteOpen] = useState(false);
+
+  // Force logout if user is deleted or inactive — show prompt first
+  useEffect(() => {
+    if (!user) return;
+
+    const unsub = onUsersChange((users) => {
+      const currentUserData = users.find(u => u.id === user.id);
+
+      if (!currentUserData) {
+        // User was deleted — show force-delete prompt
+        setForceDeleteOpen(true);
+      } else if (currentUserData.status !== 'active') {
+        logout();
+        toast.error('Your account has been deactivated.');
+        navigate('/login');
+      }
+    });
+
+    return () => unsub();
+  }, [user, logout, navigate]);
+
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [openDropdowns, setOpenDropdowns] = useState<string[]>(['Storages']); // Default open
-  const [isOnline, setIsOnline] = useState(true); // Default to true to avoid flash
+  const [openDropdowns, setOpenDropdowns] = useState<string[]>(['Procurement']);
+  const [isOnline, setIsOnline] = useState(true);
   const isFirstMount = React.useRef(true);
 
   useEffect(() => {
     const connectedRef = ref(db, ".info/connected");
 
-    // Check navigator.onLine as well for immediate feedback on hard disconnects
     const updateStatus = (isConnected: boolean) => {
       setIsOnline((prev) => {
         if (prev === isConnected) return prev;
 
-        // Only toast if not the very first check (to avoid spam on load)
         if (!isFirstMount.current) {
           if (isConnected) {
             toast.success('Network connection restored');
@@ -132,10 +160,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       updateStatus(firebaseConnected);
     });
 
-    // Also listen to browser events for faster "Offline" detection
     const handleOffline = () => updateStatus(false);
-    // We let Firebase handle the "Online" confirmation to ensure we can actually talk to DB
-
     window.addEventListener('offline', handleOffline);
 
     return () => {
@@ -162,9 +187,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   };
 
+  const isRoleAllowed = (allowedRoles?: string[]) => {
+    if (!allowedRoles) return true;
+    return allowedRoles.includes(user?.role || '');
+  };
+
   const NavbarItem = ({ item, isCollapsed }: { item: NavItem, isCollapsed: boolean }) => {
-    // Skip admin-only items for non-admin users
-    if (item.adminOnly && user?.role !== 'admin') {
+    // Check role-based access
+    if (!isRoleAllowed(item.allowedRoles)) {
       return null;
     }
 
@@ -172,8 +202,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     const isActive = location.pathname === item.path;
 
     if (item.children) {
+      // Filter children by role
+      const visibleChildren = item.children.filter(child => isRoleAllowed(child.allowedRoles));
+      if (visibleChildren.length === 0) return null;
+
       const isOpen = openDropdowns.includes(item.label);
-      const hasActiveChild = item.children.some(child => child.path === location.pathname);
+      const hasActiveChild = visibleChildren.some(child => child.path === location.pathname);
 
       return (
         <Collapsible
@@ -206,7 +240,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="pl-6 space-y-1 mt-1">
-            {item.children.map(child => {
+            {visibleChildren.map(child => {
               const ChildIcon = child.icon;
               const isChildActive = location.pathname === child.path;
               return (
@@ -280,6 +314,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <div>
                 <p className="text-sm font-medium text-foreground truncate">{user?.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                <p className="text-xs text-blue-400 mt-0.5 capitalize">{user?.role?.replace('-', ' ')}</p>
               </div>
               <TooltipProvider>
                 <Tooltip>
@@ -330,6 +365,30 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
+      {/* Force Delete Dialog */}
+      <AlertDialog open={forceDeleteOpen} onOpenChange={setForceDeleteOpen}>
+        <AlertDialogContent className="bg-[#1e293b] border-red-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-400">Account Deleted</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-300">
+              Your account has been <strong className="text-red-400">force deleted</strong> by the administrator. You will be logged out of this device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setForceDeleteOpen(false);
+                logout();
+                navigate('/login');
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Desktop Sidebar */}
       <aside
         className={cn(
@@ -360,20 +419,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 <Menu className="h-6 w-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0 bg-card border-r border-border text-foreground">
-              {/* Force collapsed to false for mobile menu */}
-              {(() => {
-                const DesktopNav = NavContent;
-                // We need to render NavContent but force isCollapsed to false.
-                // Since NavContent uses state from parent, we can't easily override it without passing props.
-                // I'll just inline a version or refactor NavContent to take props.
-                // Refactoring NavContent to take isCollapsed prop would be cleaner.
-                // But for now, I'll just render it. The state `isCollapsed` controls the desktop sidebar.
-                // The mobile sheet is always width 64.
-                // Wait, NavContent uses `isCollapsed`.
-                // I should refactor `NavContent` to accept props.
-                return <NavContent />;
-              })()}
+            <SheetContent side="left" className="w-64 p-0 bg-card border-r border-border text-foreground"><SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+              <NavContent />
             </SheetContent>
           </Sheet>
         </header>

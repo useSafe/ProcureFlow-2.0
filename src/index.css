@@ -70,6 +70,11 @@
   }
 }
 
+#procurementDate::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(1);
+  cursor: pointer;
+}
+
 /* Custom Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 10px;
@@ -402,4 +407,23 @@ button:active {
   white-space: nowrap;
   z-index: 50;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Date Input Calendar Icon — white icon pinned to far right */
+input[type="date"] {
+  position: relative;
+  padding-right: 32px !important;
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  filter: brightness(10) !important;
+  cursor: pointer;
+  opacity: 1 !important;
+  width: 16px;
+  height: 16px;
 }
