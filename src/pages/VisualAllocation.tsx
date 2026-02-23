@@ -685,8 +685,15 @@ const VisualAllocation: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <h3 className="text-[10px] uppercase font-bold text-slate-500 mt-4 mb-2 border-t border-slate-800 pt-3">Description</h3>
-                                    <p className="text-white text-sm leading-relaxed">{selectedFile.description}</p>
+                                    <h3 className="text-[10px] uppercase font-bold text-slate-500 mt-4 mb-2 border-t border-slate-800 pt-3">Description / Remarks</h3>
+                                    <p className="text-white text-sm leading-relaxed">{selectedFile.description || selectedFile.remarks || 'N/A'}</p>
+
+                                    {selectedFile.notes && (
+                                        <>
+                                            <h3 className="text-[10px] uppercase font-bold text-slate-500 mt-4 mb-2 border-t border-slate-800 pt-3">Notes</h3>
+                                            <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{selectedFile.notes}</p>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div className="p-4 bg-slate-900 rounded-lg border border-slate-800">
@@ -709,22 +716,63 @@ const VisualAllocation: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Borrow Info */}
+                            {/* Borrow Info - Only when borrowed AND has borrower data */}
                             {selectedFile.status === 'active' && (
                                 <div className="p-4 bg-orange-950/20 rounded-lg border border-orange-500/20">
                                     <h3 className="text-sm font-medium text-orange-400 mb-2">Borrower Information</h3>
+                                    {selectedFile.borrowedBy ? (
+                                        <div className="grid grid-cols-2 gap-4 text-xs text-white">
+                                            <div>
+                                                <span className="text-slate-500 block">Borrower:</span>
+                                                {selectedFile.borrowedBy}
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-500 block">Borrower Division:</span>
+                                                {selectedFile.borrowerDivision || 'N/A'}
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-500 block">Date Borrowed:</span>
+                                                {selectedFile.borrowedDate ? format(new Date(selectedFile.borrowedDate), 'MMM d, yyyy') : 'N/A'}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-500 italic">No borrower details recorded.</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Borrow/Return History - Only when archived and has history */}
+                            {selectedFile.status === 'archived' && (selectedFile.borrowedBy || selectedFile.returnedBy || selectedFile.returnDate) && (
+                                <div className="p-4 bg-emerald-950/20 rounded-lg border border-emerald-500/20">
+                                    <h3 className="text-sm font-medium text-emerald-400 mb-2">Borrow / Return History</h3>
                                     <div className="grid grid-cols-2 gap-4 text-xs text-white">
-                                        <div>
-                                            <span className="text-slate-500 block">Borrower:</span>
-                                            {selectedFile.borrowedBy || 'N/A'}
-                                        </div>
-                                        <div>
-                                            <span className="text-slate-500 block">Date Borrowed:</span>
-                                            {selectedFile.borrowedDate ? format(new Date(selectedFile.borrowedDate), 'MMM d, yyyy') : 'N/A'}
-                                        </div>
+                                        {selectedFile.borrowedBy && (
+                                            <div>
+                                                <span className="text-slate-500 block">Borrowed By:</span>
+                                                {selectedFile.borrowedBy}
+                                            </div>
+                                        )}
+                                        {selectedFile.borrowerDivision && (
+                                            <div>
+                                                <span className="text-slate-500 block">Borrower Division:</span>
+                                                {selectedFile.borrowerDivision}
+                                            </div>
+                                        )}
+                                        {selectedFile.borrowedDate && (
+                                            <div>
+                                                <span className="text-slate-500 block">Date Borrowed:</span>
+                                                {format(new Date(selectedFile.borrowedDate), 'MMM d, yyyy')}
+                                            </div>
+                                        )}
+                                        {selectedFile.returnedBy && (
+                                            <div>
+                                                <span className="text-slate-500 block">Returned By:</span>
+                                                {selectedFile.returnedBy}
+                                            </div>
+                                        )}
                                         {selectedFile.returnDate && (
                                             <div>
-                                                <span className="text-slate-500 block">Return Date:</span>
+                                                <span className="text-slate-500 block">Date Returned:</span>
                                                 {format(new Date(selectedFile.returnDate), 'MMM d, yyyy')}
                                             </div>
                                         )}

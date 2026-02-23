@@ -380,6 +380,11 @@ const AddProcurement: React.FC = () => {
 
                 checklist: checklist, // If specialized checks needed
                 tags: [],
+
+                // Borrowing Info
+                borrowedBy: status === 'active' ? borrowerName : undefined,
+                borrowerDivision: status === 'active' ? divisions.find(d => d.id === borrowingDivisionId)?.name : undefined,
+                borrowedDate: status === 'active' && borrowedDate ? borrowedDate.toISOString() : undefined,
             };
 
             await addProcurement(
@@ -1120,7 +1125,7 @@ const AddProcurement: React.FC = () => {
                         </Button>
                         <Button
                             type="submit"
-                            disabled={isLoading || (storageMode === 'shelf' ? (!cabinetId || !shelfId || !folderId) : (!cabinetId || !shelfId || !boxId || !folderId))}
+                            disabled={isLoading || (storageMode === 'shelf' ? (!cabinetId || !shelfId || !folderId) : (!boxId || !folderId))}
                             className="bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 text-white px-10 py-4 text-base font-semibold shadow-xl"
                         >
                             {isLoading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Saving Record...</> : <><Save className="mr-2 h-5 w-5" />Save Procurement Record</>}

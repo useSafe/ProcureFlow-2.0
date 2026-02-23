@@ -184,11 +184,21 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                             {/* Main Details */}
                             <div className="space-y-4">
                                 <div>
-                                    <h3 className="text-lg font-semibold border-b border-slate-800 pb-2 mb-3">Description</h3>
+                                    <h3 className="text-lg font-semibold border-b border-slate-800 pb-2 mb-3">Description / Remarks</h3>
                                     <p className="text-slate-200 leading-relaxed bg-[#1e293b] p-4 rounded-md text-sm border border-slate-700/50">
-                                        {procurement.description}
+                                        {procurement.description || procurement.remarks || 'N/A'}
                                     </p>
                                 </div>
+
+                                {/* Notes */}
+                                {procurement.notes && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold border-b border-slate-800 pb-2 mb-3">Notes</h3>
+                                        <p className="text-slate-200 leading-relaxed bg-[#1e293b] p-4 rounded-md text-sm border border-slate-700/50 whitespace-pre-wrap">
+                                            {procurement.notes}
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div>
                                     <div className="border-b border-slate-800 pb-2 mb-3">
@@ -307,8 +317,8 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Access Log / Borrow Info */}
-                                {procurement.status === 'active' && (
+                                {/* Access Log / Borrow Info - show when actively borrowed */}
+                                {procurement.status === 'active' && procurement.borrowedBy && (
                                     <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-4 mt-2">
                                         <h4 className="text-orange-400 font-semibold mb-2 flex items-center gap-2">
                                             <User className="h-4 w-4" />
@@ -317,7 +327,7 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                         <div className="grid grid-cols-2 gap-4 text-sm">
                                             <div>
                                                 <span className="text-slate-500">Borrowed By:</span>
-                                                <p className="font-medium text-slate-200">{procurement.borrowedBy || 'N/A'}</p>
+                                                <p className="font-medium text-slate-200">{procurement.borrowedBy}</p>
                                             </div>
                                             <div>
                                                 <span className="text-slate-500">Division:</span>
@@ -331,26 +341,55 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                     </div>
                                 )}
 
-                                {/* Return Info - Show if Archived and has return data */}
-                                {procurement.status === 'archived' && (
+                                {/* Borrow history for archived (previously borrowed) */}
+                                {procurement.status === 'active' && !procurement.borrowedBy && (
+                                    <div className="bg-orange-500/5 border border-orange-500/20 rounded-lg p-4 mt-2">
+                                        <h4 className="text-orange-400 font-semibold mb-2 flex items-center gap-2">
+                                            <User className="h-4 w-4" />
+                                            Current Borrower Info
+                                        </h4>
+                                        <p className="text-sm text-slate-500 italic">No borrower details recorded.</p>
+                                    </div>
+                                )}
+
+                                {/* Return Info - Only show when archived AND has borrow/return history */}
+                                {procurement.status === 'archived' && (procurement.borrowedBy || procurement.returnedBy || procurement.returnDate) && (
                                     <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4 mt-2">
                                         <h4 className="text-emerald-400 font-semibold mb-2 flex items-center gap-2">
                                             <User className="h-4 w-4" />
-                                            Return Information
+                                            Borrow / Return History
                                         </h4>
                                         <div className="grid grid-cols-2 gap-4 text-sm">
-                                            <div>
-                                                <span className="text-slate-500">Returned By:</span>
-                                                <p className="font-medium text-slate-200">{procurement.returnedBy || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-slate-500">Division:</span>
-                                                <p className="font-medium text-slate-200">{procurement.borrowerDivision || 'N/A'}</p>
-                                            </div>
-                                            <div>
-                                                <span className="text-slate-500">Date Returned:</span>
-                                                <p className="font-medium text-slate-200">{formatDate(procurement.returnDate)}</p>
-                                            </div>
+                                            {procurement.borrowedBy && (
+                                                <div>
+                                                    <span className="text-slate-500">Borrowed By:</span>
+                                                    <p className="font-medium text-slate-200">{procurement.borrowedBy}</p>
+                                                </div>
+                                            )}
+                                            {procurement.borrowerDivision && (
+                                                <div>
+                                                    <span className="text-slate-500">Borrower Division:</span>
+                                                    <p className="font-medium text-slate-200">{procurement.borrowerDivision}</p>
+                                                </div>
+                                            )}
+                                            {procurement.borrowedDate && (
+                                                <div>
+                                                    <span className="text-slate-500">Date Borrowed:</span>
+                                                    <p className="font-medium text-slate-200">{formatDate(procurement.borrowedDate)}</p>
+                                                </div>
+                                            )}
+                                            {procurement.returnedBy && (
+                                                <div>
+                                                    <span className="text-slate-500">Returned By:</span>
+                                                    <p className="font-medium text-slate-200">{procurement.returnedBy}</p>
+                                                </div>
+                                            )}
+                                            {procurement.returnDate && (
+                                                <div>
+                                                    <span className="text-slate-500">Date Returned:</span>
+                                                    <p className="font-medium text-slate-200">{formatDate(procurement.returnDate)}</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
