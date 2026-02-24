@@ -897,7 +897,7 @@ const AddProcurement: React.FC = () => {
                     </div>
                 </div>
 
-                /* {/* TAB 3 (cont): Documents â€” Additional Info + continuation */}
+                {/* TAB 3 (cont): Documents â€” Additional Info + continuation */}
                 <div className={activeTab !== 'documents' ? 'hidden' : ''} id="tab-documents-extra">
 
                     {/* TAB 3 (cont): Documents — Additional Info */}
@@ -937,7 +937,7 @@ const AddProcurement: React.FC = () => {
                                 />
                             </div>
                         </CardContent>
-                    </Card> */
+                    </Card>
 
                     {/* Documents Extra Nav Buttons */}
                     <div className="flex justify-between mt-4">
@@ -1218,7 +1218,3 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
         </Popover>
     </div>
 );
-
-
-
-
