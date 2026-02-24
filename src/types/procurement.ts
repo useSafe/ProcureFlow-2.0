@@ -98,6 +98,7 @@ export interface Procurement {
     rfqOpeningDate?: string;
     bacResolutionDate?: string;
     forwardedGsdDate?: string;
+    poNtpForwardedGsdDate?: string;
 
     // Monitoring Dates - Regular Bidding
     preBidDate?: string;

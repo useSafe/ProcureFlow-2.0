@@ -101,66 +101,6 @@ const MONTHS = [
     { value: 'AUG', label: 'Aug' },
     { value: 'SEP', label: 'Sep' },
     { value: 'OCT', label: 'Oct' },
-    { value: 'NOV', label: 'Nov' },
-    { value: 'DEC', label: 'Dec' },
-];
-
-const checklistItems = CHECKLIST_ITEMS;
-
-const MonitoringDateField = ({ label, value, onChange, disabled, activeColor = 'blue' }: { label: string; value: string | undefined; onChange: (date: string | undefined) => void; disabled: boolean; activeColor?: 'blue' | 'purple' | 'emerald' }) => {
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const dateStr = value ? format(new Date(value), 'yyyy-MM-dd') : '';
-
-    React.useEffect(() => {
-        if (inputRef.current && inputRef.current.value !== dateStr) {
-            inputRef.current.value = dateStr;
-        }
-    }, [dateStr]);
-
-    const activeClasses = {
-        blue: { border: 'border-blue-500/30', bg: 'bg-blue-900/10', text: 'text-blue-400', checkBg: 'data-[state=checked]:bg-blue-600', checkBorder: 'data-[state=checked]:border-blue-600', ring: 'focus:ring-blue-500' },
-        purple: { border: 'border-purple-500/30', bg: 'bg-purple-900/10', text: 'text-purple-400', checkBg: 'data-[state=checked]:bg-purple-600', checkBorder: 'data-[state=checked]:border-purple-600', ring: 'focus:ring-purple-500' },
-        emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-900/10', text: 'text-emerald-400', checkBg: 'data-[state=checked]:bg-emerald-600', checkBorder: 'data-[state=checked]:border-emerald-600', ring: 'focus:ring-emerald-500' }
-    }[activeColor] as any;
-
-    return (
-        <div className={`space-y-2 p-3 rounded-lg border transition-all ${disabled ? 'border-slate-800 bg-slate-900/30 opacity-50' : value ? `${activeClasses.border} ${activeClasses.bg}` : 'border-slate-700 bg-[#1e293b]/50'}`}>
-            <div className="flex items-center gap-2">
-                <Checkbox
-                    checked={!!value}
-                    onCheckedChange={(c) => onChange(c ? (value || new Date().toISOString()) : undefined)}
-                    disabled={disabled}
-                    className={`h-4 w-4 border-slate-500 ${activeClasses.checkBg} ${activeClasses.checkBorder} disabled:opacity-50`}
-                />
-                <span className={`text-sm font-medium ${value ? activeClasses.text : disabled ? 'text-slate-600' : 'text-slate-300'}`}>{label}</span>
-            </div>
-            <div className="pl-6">
-                <Input
-                    ref={inputRef}
-                    type="date"
-                    max="9999-12-31"
-                    defaultValue={dateStr}
-                    onBlur={(e) => {
-                        const val = e.target.value;
-                        if (val !== dateStr) onChange(val ? new Date(val).toISOString() : undefined);
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            const val = e.currentTarget.value;
-                            if (val !== dateStr) onChange(val ? new Date(val).toISOString() : undefined);
-                        }
-                    }}
-                    disabled={disabled}
-                    className={`h-8 px-2 rounded-md bg-[#0f172a] border border-slate-700 text-slate-300 text-xs w-full outline-none ${activeClasses.ring} ${disabled ? 'cursor-not-allowed text-slate-500' : ''} [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:invert`}
-                />
-            </div>
-        </div>
-    );
-};
-
-interface ProcurementListProps {
-    forcedType?: string; // 'Small Value Procurement(SVP)' | 'Regular Bidding' | etc.
-    pageTitle?: string;
 }
 
 const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle }) => {
@@ -210,6 +150,7 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
         if (!procurement.rfqOpeningDate) return 'RFQ Opening';
         if (!procurement.bacResolutionDate) return 'BAC Resolution';
         if (!procurement.forwardedGsdDate) return 'Forwarded GSD for P.O.';
+        if (!procurement.poNtpForwardedGsdDate) return 'Add PO/NTP forwarded to GSD';
 
         return 'P.O. Created';
     };

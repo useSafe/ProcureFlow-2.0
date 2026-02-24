@@ -31,15 +31,12 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return 'N/A';
-        try {
-            return format(new Date(dateString), 'PPP');
-        } catch (e) {
-            return 'Invalid Date';
-        }
+        return dateString;
     };
 
     const getCurrentStage = (p: Procurement) => {
         if (p.procurementType === 'SVP') {
+            if (p.poNtpForwardedGsdDate) return 'Add PO/NTP forwarded to GSD';
             if (p.forwardedGsdDate) return 'Forwarded GSD for P.O.';
             if (p.bacResolutionDate) return 'BAC Resolution';
             if (p.rfqOpeningDate) return 'RFQ Opening';
@@ -307,10 +304,16 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                                         </div>
                                                     </>
                                                 ) : (
-                                                    <div className="space-y-1">
-                                                        <label className="text-xs text-slate-500 block">To GSD</label>
-                                                        <p className="font-mono text-sm text-slate-200">{formatDate(procurement.forwardedGsdDate)}</p>
-                                                    </div>
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">To GSD</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.forwardedGsdDate)}</p>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-xs text-slate-500 block">PO/NTP to GSD</label>
+                                                            <p className="font-mono text-sm text-slate-200">{formatDate(procurement.poNtpForwardedGsdDate)}</p>
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>

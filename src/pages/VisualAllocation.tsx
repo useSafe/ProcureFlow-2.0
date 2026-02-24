@@ -49,6 +49,7 @@ const SVP_PHASES: Phase[] = [
     { key: 'rfqOpeningDate', label: 'RFQ Opening', shortLabel: 'RFQ Open', icon: Gavel, dateField: 'rfqOpeningDate' },
     { key: 'bacResolutionDate', label: 'BAC Resolution', shortLabel: 'BAC Res', icon: FileCheck, dateField: 'bacResolutionDate' },
     { key: 'forwardedGsdDate', label: 'Forwarded to GSD', shortLabel: 'To GSD', icon: PackageCheck, dateField: 'forwardedGsdDate' },
+    { key: 'poNtpForwardedGsdDate', label: 'PO/NTP to GSD', shortLabel: 'PO To GSD', icon: PackageCheck, dateField: 'poNtpForwardedGsdDate' },
 ];
 
 // Phase circle color based on completion

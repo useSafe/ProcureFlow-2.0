@@ -132,10 +132,11 @@ const AddProcurement: React.FC = () => {
     );
 
     // PR Number Construction State
+    const [prFormat, setPrFormat] = useState<'old' | 'new'>(draft?.prFormat || 'old');
     const [prDivisionId, setPrDivisionId] = useState(draft?.prDivisionId || '');
     const [prMonth, setPrMonth] = useState(draft?.prMonth || format(new Date(), 'MMM').toUpperCase());
-    const [prYear, setPrYear] = useState(draft?.prYear || format(new Date(), 'yy'));
-    const [prSequence, setPrSequence] = useState(draft?.prSequence || '001');
+    const [prYear, setPrYear] = useState(draft?.prYear || format(new Date(), 'yyyy'));
+    const [prSequence, setPrSequence] = useState(draft?.prSequence || '0001');
 
     // Division Selection (End User)
     const [selectedDivisionId, setSelectedDivisionId] = useState(draft?.selectedDivisionId || '');
@@ -153,59 +154,26 @@ const AddProcurement: React.FC = () => {
     const [newFolderCode, setNewFolderCode] = useState('');
 
     // Monitoring Dates - Common
-    const [receivedPrDate, setReceivedPrDate] = useState<Date | undefined>(
-        draft?.receivedPrDate ? new Date(draft.receivedPrDate) : undefined
-    );
-    const [prDeliberatedDate, setPrDeliberatedDate] = useState<Date | undefined>(
-        draft?.prDeliberatedDate ? new Date(draft.prDeliberatedDate) : undefined
-    );
-    const [publishedDate, setPublishedDate] = useState<Date | undefined>(
-        draft?.publishedDate ? new Date(draft.publishedDate) : undefined
-    );
-    const [rfqCanvassDate, setRfqCanvassDate] = useState<Date | undefined>(
-        draft?.rfqCanvassDate ? new Date(draft.rfqCanvassDate) : undefined
-    );
-    const [rfqOpeningDate, setRfqOpeningDate] = useState<Date | undefined>(
-        draft?.rfqOpeningDate ? new Date(draft.rfqOpeningDate) : undefined
-    );
-    const [bacResolutionDate, setBacResolutionDate] = useState<Date | undefined>(
-        draft?.bacResolutionDate ? new Date(draft.bacResolutionDate) : undefined
-    );
-    const [forwardedGsdDate, setForwardedGsdDate] = useState<Date | undefined>(
-        draft?.forwardedGsdDate ? new Date(draft.forwardedGsdDate) : undefined
-    );
+    const [receivedPrDate, setReceivedPrDate] = useState<string>(draft?.receivedPrDate || '');
+    const [prDeliberatedDate, setPrDeliberatedDate] = useState<string>(draft?.prDeliberatedDate || '');
+    const [publishedDate, setPublishedDate] = useState<string>(draft?.publishedDate || '');
+    const [rfqCanvassDate, setRfqCanvassDate] = useState<string>(draft?.rfqCanvassDate || '');
+    const [rfqOpeningDate, setRfqOpeningDate] = useState<string>(draft?.rfqOpeningDate || '');
+    const [bacResolutionDate, setBacResolutionDate] = useState<string>(draft?.bacResolutionDate || '');
+    const [forwardedGsdDate, setForwardedGsdDate] = useState<string>(draft?.forwardedGsdDate || '');
+    const [poNtpForwardedGsdDate, setPoNtpForwardedGsdDate] = useState<string>(draft?.poNtpForwardedGsdDate || '');
 
     // Monitoring Dates - Regular Bidding specific
-    const [preBidDate, setPreBidDate] = useState<Date | undefined>(
-        draft?.preBidDate ? new Date(draft.preBidDate) : undefined
-    );
-    const [bidOpeningDate, setBidOpeningDate] = useState<Date | undefined>(
-        draft?.bidOpeningDate ? new Date(draft.bidOpeningDate) : undefined
-    );
-    const [bidEvaluationDate, setBidEvaluationDate] = useState<Date | undefined>(
-        draft?.bidEvaluationDate ? new Date(draft.bidEvaluationDate) : undefined
-    );
-    const [postQualDate, setPostQualDate] = useState<Date | undefined>(
-        draft?.postQualDate ? new Date(draft.postQualDate) : undefined
-    );
-    const [postQualReportDate, setPostQualReportDate] = useState<Date | undefined>(
-        draft?.postQualReportDate ? new Date(draft.postQualReportDate) : undefined
-    );
-    const [forwardedOapiDate, setForwardedOapiDate] = useState<Date | undefined>(
-        draft?.forwardedOapiDate ? new Date(draft.forwardedOapiDate) : undefined
-    );
-    const [noaDate, setNoaDate] = useState<Date | undefined>(
-        draft?.noaDate ? new Date(draft.noaDate) : undefined
-    );
-    const [contractDate, setContractDate] = useState<Date | undefined>(
-        draft?.contractDate ? new Date(draft.contractDate) : undefined
-    );
-    const [ntpDate, setNtpDate] = useState<Date | undefined>(
-        draft?.ntpDate ? new Date(draft.ntpDate) : undefined
-    );
-    const [awardedToDate, setAwardedToDate] = useState<Date | undefined>(
-        draft?.awardedToDate ? new Date(draft.awardedToDate) : undefined
-    );
+    const [preBidDate, setPreBidDate] = useState<string>(draft?.preBidDate || '');
+    const [bidOpeningDate, setBidOpeningDate] = useState<string>(draft?.bidOpeningDate || '');
+    const [bidEvaluationDate, setBidEvaluationDate] = useState<string>(draft?.bidEvaluationDate || '');
+    const [postQualDate, setPostQualDate] = useState<string>(draft?.postQualDate || '');
+    const [postQualReportDate, setPostQualReportDate] = useState<string>(draft?.postQualReportDate || '');
+    const [forwardedOapiDate, setForwardedOapiDate] = useState<string>(draft?.forwardedOapiDate || '');
+    const [noaDate, setNoaDate] = useState<string>(draft?.noaDate || '');
+    const [contractDate, setContractDate] = useState<string>(draft?.contractDate || '');
+    const [ntpDate, setNtpDate] = useState<string>(draft?.ntpDate || '');
+    const [awardedToDate, setAwardedToDate] = useState<string>(draft?.awardedToDate || '');
 
     // Checklist State
     const [checklist, setChecklist] = useState<Record<string, boolean>>(draft?.checklist || {});
@@ -220,33 +188,33 @@ const AddProcurement: React.FC = () => {
             borrowerName, borrowingDivisionId,
             borrowedDate: borrowedDate?.toISOString(),
             dateAdded: dateAdded?.toISOString(),
-            prDivisionId, prMonth, prYear, prSequence,
+            prFormat, prDivisionId, prMonth, prYear, prSequence,
             selectedDivisionId,
             storageMode, cabinetId, shelfId, folderId, boxId,
-            receivedPrDate: receivedPrDate?.toISOString(),
-            prDeliberatedDate: prDeliberatedDate?.toISOString(),
-            publishedDate: publishedDate?.toISOString(),
-            rfqCanvassDate: rfqCanvassDate?.toISOString(),
-            rfqOpeningDate: rfqOpeningDate?.toISOString(),
-            bacResolutionDate: bacResolutionDate?.toISOString(),
-            forwardedGsdDate: forwardedGsdDate?.toISOString(),
-            preBidDate: preBidDate?.toISOString(),
-            bidOpeningDate: bidOpeningDate?.toISOString(),
-            bidEvaluationDate: bidEvaluationDate?.toISOString(),
-            postQualDate: postQualDate?.toISOString(),
-            postQualReportDate: postQualReportDate?.toISOString(),
-            forwardedOapiDate: forwardedOapiDate?.toISOString(),
-            noaDate: noaDate?.toISOString(),
-            contractDate: contractDate?.toISOString(),
-            ntpDate: ntpDate?.toISOString(),
-            awardedToDate: awardedToDate?.toISOString(),
+            receivedPrDate: receivedPrDate,
+            prDeliberatedDate: prDeliberatedDate,
+            publishedDate: publishedDate,
+            rfqCanvassDate: rfqCanvassDate,
+            rfqOpeningDate: rfqOpeningDate,
+            bacResolutionDate: bacResolutionDate,
+            forwardedGsdDate: forwardedGsdDate,
+            preBidDate: preBidDate,
+            bidOpeningDate: bidOpeningDate,
+            bidEvaluationDate: bidEvaluationDate,
+            postQualDate: postQualDate,
+            postQualReportDate: postQualReportDate,
+            forwardedOapiDate: forwardedOapiDate,
+            noaDate: noaDate,
+            contractDate: contractDate,
+            ntpDate: ntpDate,
+            awardedToDate: awardedToDate,
             checklist,
         });
     }, [
         formMode, activeTab, projectName, description, status, procurementProcessStatus,
         dateStatusUpdated, abc, bidAmount, supplier, notes, staffIncharge,
         borrowerName, borrowingDivisionId, borrowedDate, dateAdded,
-        prDivisionId, prMonth, prYear, prSequence, selectedDivisionId,
+        prFormat, prDivisionId, prMonth, prYear, prSequence, selectedDivisionId,
         storageMode, cabinetId, shelfId, folderId, boxId,
         receivedPrDate, prDeliberatedDate, publishedDate, rfqCanvassDate,
         rfqOpeningDate, bacResolutionDate, forwardedGsdDate, preBidDate,
@@ -257,6 +225,7 @@ const AddProcurement: React.FC = () => {
     // ── Clear Form handler ────────────────────────────────────────────────────
     const handleClearForm = useCallback(() => {
         clearDraft(userEmail);
+        // Reset all form state to defaults
         setFormMode('SVP');
         setActiveTab('basic');
         setProjectName('');
@@ -273,64 +242,88 @@ const AddProcurement: React.FC = () => {
         setBorrowingDivisionId('');
         setBorrowedDate(undefined);
         setDateAdded(new Date());
+        setPrFormat('old');
         setPrDivisionId('');
         setPrMonth(format(new Date(), 'MMM').toUpperCase());
-        setPrYear(format(new Date(), 'yy'));
-        setPrSequence('001');
+        setPrYear(format(new Date(), 'yyyy'));
+        setPrSequence('0001');
         setSelectedDivisionId('');
         setStorageMode('shelf');
         setCabinetId('');
         setShelfId('');
         setFolderId('');
         setBoxId('');
-        setReceivedPrDate(undefined);
-        setPrDeliberatedDate(undefined);
-        setPublishedDate(undefined);
-        setRfqCanvassDate(undefined);
-        setRfqOpeningDate(undefined);
-        setBacResolutionDate(undefined);
-        setForwardedGsdDate(undefined);
-        setPreBidDate(undefined);
-        setBidOpeningDate(undefined);
-        setBidEvaluationDate(undefined);
-        setPostQualDate(undefined);
-        setPostQualReportDate(undefined);
-        setForwardedOapiDate(undefined);
-        setNoaDate(undefined);
-        setContractDate(undefined);
-        setNtpDate(undefined);
-        setAwardedToDate(undefined);
+        setReceivedPrDate('');
+        setPrDeliberatedDate('');
+        setPublishedDate('');
+        setRfqCanvassDate('');
+        setRfqOpeningDate('');
+        setBacResolutionDate('');
+        setForwardedGsdDate('');
+        setPoNtpForwardedGsdDate('');
+        setPreBidDate('');
+        setBidOpeningDate('');
+        setBidEvaluationDate('');
+        setPostQualDate('');
+        setPostQualReportDate('');
+        setForwardedOapiDate('');
+        setNoaDate('');
+        setContractDate('');
+        setNtpDate('');
+        setAwardedToDate('');
         setChecklist({});
         toast.success('Form cleared');
     }, [userEmail, user?.name]);
 
 
-    // Auto-generate Sequence based on PR Division and Year
+    // Auto-generate Sequence based on PR format, Division (old only), and Year
     useEffect(() => {
-        if (prDivisionId && prYear) {
-            const div = divisions.find(d => d.id === prDivisionId);
-            if (!div) return;
+        if (prYear) {
+            if (prFormat === 'old') {
+                // Old format: DIV-MMM-YY-SEQ — needs division
+                if (!prDivisionId) return;
+                const div = divisions.find(d => d.id === prDivisionId);
+                if (!div) return;
 
-            const yearStr = `-${prYear}-`;
-            const divStr = `${div.abbreviation}-`;
+                const yearStr = `-${prYear}-`;
+                const divStr = `${div.abbreviation}-`;
 
-            const matching = procurements.filter(p =>
-                p.prNumber.startsWith(divStr) &&
-                p.prNumber.includes(yearStr)
-            );
+                const matching = procurements.filter(p =>
+                    p.prNumber.startsWith(divStr) &&
+                    p.prNumber.includes(yearStr)
+                );
 
-            let maxSeq = 0;
-            matching.forEach(p => {
-                const parts = p.prNumber.split('-');
-                if (parts.length >= 4) {
-                    const seq = parseInt(parts[3]);
-                    if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
-                }
-            });
+                let maxSeq = 0;
+                matching.forEach(p => {
+                    const parts = p.prNumber.split('-');
+                    if (parts.length >= 4) {
+                        const seq = parseInt(parts[3]);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                });
 
-            setPrSequence((maxSeq + 1).toString().padStart(3, '0'));
+                setPrSequence((maxSeq + 1).toString().padStart(4, '0'));
+            } else {
+                // New format: YY-MMM-SEQ — no division needed
+                const yearStr = `${prYear}-`;
+
+                const matching = procurements.filter(p =>
+                    p.prNumber.startsWith(yearStr)
+                );
+
+                let maxSeq = 0;
+                matching.forEach(p => {
+                    const parts = p.prNumber.split('-');
+                    if (parts.length >= 3) {
+                        const seq = parseInt(parts[2]);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                });
+
+                setPrSequence((maxSeq + 1).toString().padStart(4, '0'));
+            }
         }
-    }, [prDivisionId, prYear, divisions, procurements, prMonth]);
+    }, [prFormat, prDivisionId, prYear, divisions, procurements, prMonth]);
 
 
     // Fetch Divisions
@@ -421,13 +414,20 @@ const AddProcurement: React.FC = () => {
             return;
         }
         // Validate PR Number construction
-        const prDivisionAbbr = divisions.find(d => d.id === prDivisionId)?.abbreviation || 'XXX';
-        const constructedPrNumber = prDivisionId && prMonth && prYear && prSequence
-            ? `${prDivisionAbbr}-${prMonth}-${prYear}-${prSequence}`
-            : '';
-        if (!constructedPrNumber || !prDivisionId) {
-            toast.error('Please complete all PR Number fields (Division, Month, Year, Sequence)');
-            return;
+        let constructedPrNumber = '';
+        if (prFormat === 'old') {
+            const prDivisionAbbr = divisions.find(d => d.id === prDivisionId)?.abbreviation || 'XXX';
+            if (!prDivisionId || !prMonth || !prYear || !prSequence) {
+                toast.error('Please complete all PR Number fields (Division, Month, Year, Sequence)');
+                return;
+            }
+            constructedPrNumber = `${prDivisionAbbr}-${prMonth}-${prYear.slice(-2)}-${prSequence}`;
+        } else {
+            if (!prMonth || !prYear || !prSequence) {
+                toast.error('Please complete all PR Number fields (Month, Year, Sequence)');
+                return;
+            }
+            constructedPrNumber = `${prYear}-${prMonth}-${prSequence}`;
         }
 
         // ABC and Bid Amount Validation
@@ -510,24 +510,24 @@ const AddProcurement: React.FC = () => {
                 remarks: description, // Mapping description to remarks explicitly too
 
                 // Dates - Common
-                receivedPrDate: receivedPrDate ? receivedPrDate.toISOString() : undefined,
-                publishedDate: publishedDate?.toISOString(),
-                rfqCanvassDate: rfqCanvassDate?.toISOString(),
-                rfqOpeningDate: rfqOpeningDate?.toISOString(),
-                bacResolutionDate: bacResolutionDate?.toISOString(),
-                forwardedGsdDate: forwardedGsdDate?.toISOString(),
+                receivedPrDate: receivedPrDate || undefined,
+                publishedDate: publishedDate,
+                rfqCanvassDate: rfqCanvassDate,
+                rfqOpeningDate: rfqOpeningDate,
+                bacResolutionDate: bacResolutionDate,
+                forwardedGsdDate: forwardedGsdDate,
 
                 // Dates - Regular
-                preBidDate: preBidDate?.toISOString(),
-                bidOpeningDate: bidOpeningDate?.toISOString(),
-                bidEvaluationDate: bidEvaluationDate?.toISOString(),
-                postQualDate: postQualDate?.toISOString(),
-                postQualReportDate: postQualReportDate?.toISOString(),
-                forwardedOapiDate: forwardedOapiDate?.toISOString(),
-                noaDate: noaDate?.toISOString(),
-                contractDate: contractDate?.toISOString(),
-                ntpDate: ntpDate?.toISOString(),
-                awardedToDate: awardedToDate?.toISOString(),
+                preBidDate: preBidDate,
+                bidOpeningDate: bidOpeningDate,
+                bidEvaluationDate: bidEvaluationDate,
+                postQualDate: postQualDate,
+                postQualReportDate: postQualReportDate,
+                forwardedOapiDate: forwardedOapiDate,
+                noaDate: noaDate,
+                contractDate: contractDate,
+                ntpDate: ntpDate,
+                awardedToDate: awardedToDate,
 
                 checklist: checklist, // If specialized checks needed
                 tags: [],
@@ -563,7 +563,7 @@ const AddProcurement: React.FC = () => {
 
     // Tab validation: basic tab requires projectName, PR details, selected division, and ABC, Staff, Status, Date
     const canGoToMonitoring = !!projectName.trim() &&
-        !!prDivisionId &&
+        (prFormat === 'new' || !!prDivisionId) &&
         !!prMonth &&
         !!prYear &&
         !!prSequence &&
@@ -669,24 +669,48 @@ const AddProcurement: React.FC = () => {
 
                             {/* PR Number Construction */}
                             <div className="p-4 rounded-lg bg-[#1e293b]/50 border border-slate-700/50 space-y-4">
-                                <Label className="text-slate-300">PR Number Construction</Label>
-                                <div className="grid gap-4 md:grid-cols-4 items-end">
-                                    {/* Division Acronym */}
-                                    <div className="space-y-2">
-                                        <Label className="text-xs text-slate-400">Division (for PR Number)</Label>
-                                        <Select value={prDivisionId} onValueChange={setPrDivisionId}>
-                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
-                                                <SelectValue placeholder="Select Division" />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                                {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
-                                                    <SelectItem key={div.id} value={div.id}>
-                                                        {div.abbreviation} - {div.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <Label className="text-slate-300">PR Number Construction</Label>
+                                    {/* Format Toggle */}
+                                    <div className="flex bg-[#0f172a] p-0.5 rounded-lg border border-slate-700 text-xs">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPrFormat('old')}
+                                            className={`px-3 py-1 rounded-md font-medium transition-all ${prFormat === 'old' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                                                }`}
+                                        >
+                                            Old (Div-Mon-Yr-#)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPrFormat('new')}
+                                            className={`px-3 py-1 rounded-md font-medium transition-all ${prFormat === 'new' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                                                }`}
+                                        >
+                                            New (Yr-Mon-#)
+                                        </button>
                                     </div>
+                                </div>
+
+                                <div className={`grid gap-4 items-end ${prFormat === 'old' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                                    {/* Division Acronym — only for Old format */}
+                                    {prFormat === 'old' && (
+                                        <div className="space-y-2">
+                                            <Label className="text-xs text-slate-400">Division <span className="text-red-400">*</span></Label>
+                                            <Select value={prDivisionId} onValueChange={setPrDivisionId}>
+                                                <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white">
+                                                    <SelectValue placeholder="Select Division" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                                    {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
+                                                        <SelectItem key={div.id} value={div.id}>
+                                                            {div.abbreviation} - {div.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
 
                                     {/* Month */}
                                     <div className="space-y-2">
@@ -708,7 +732,7 @@ const AddProcurement: React.FC = () => {
                                         <Label className="text-xs text-slate-400">Year (YY)</Label>
                                         <Input
                                             type="text"
-                                            maxLength={2}
+                                            maxLength={4}
                                             value={prYear}
                                             onChange={(e) => setPrYear(e.target.value)}
                                             className="bg-[#1e293b] border-slate-700 text-white"
@@ -725,8 +749,16 @@ const AddProcurement: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+
                                 <div className="mt-2 text-sm text-slate-400">
-                                    Preview: <span className="font-mono text-emerald-400 font-bold ml-2">{prDivisionId && divisions.find(d => d.id === prDivisionId) ? `${divisions.find(d => d.id === prDivisionId)?.abbreviation}-${prMonth}-${prYear}-${prSequence}` : 'XXX-XXX-XX-XXX'}</span>
+                                    Preview: <span className="font-mono text-emerald-400 font-bold ml-2">
+                                        {prFormat === 'old'
+                                            ? (prDivisionId && divisions.find(d => d.id === prDivisionId)
+                                                ? `${divisions.find(d => d.id === prDivisionId)?.abbreviation}-${prMonth}-${prYear}-${prSequence}`
+                                                : 'DIV-MON-YY-###')
+                                            : `${prYear}-${prMonth}-${prSequence}`
+                                        }
+                                    </span>
                                 </div>
                             </div>
 
@@ -798,7 +830,7 @@ const AddProcurement: React.FC = () => {
 
                                 <div className="grid gap-6 md:grid-cols-2 mt-2">
                                     <div className="space-y-2">
-                                        <Label className="text-slate-300">Supplier / Awarded To</Label>
+                                        <Label className="text-slate-300">Supplier / Awarded To <span className="text-slate-500 text-xs">(Optional)</span></Label>
                                         <Input
                                             value={supplier}
                                             onChange={(e) => setSupplier(e.target.value)}
@@ -858,18 +890,18 @@ const AddProcurement: React.FC = () => {
                                 <div className="space-y-2">
                                     <Label className="text-slate-300">Date Status Updated <span className="text-red-400">*</span></Label>
                                     <Input
-                                        type="date"
-                                        defaultValue={dateStatusUpdated ? format(dateStatusUpdated, "yyyy-MM-dd") : ""}
+                                        type="text"
+                                        defaultValue={dateStatusUpdated ? format(dateStatusUpdated, "MM/dd/yyyy") : format(new Date(), "MM/dd/yyyy")}
                                         onChange={(e) => {
                                             const val = e.target.value;
-                                            if (val && val.length === 10) {
+                                            try {
                                                 const d = new Date(val);
-                                                if (!isNaN(d.getTime())) setDateStatusUpdated(d);
-                                            } else if (!val) {
-                                                setDateStatusUpdated(undefined);
-                                            }
+                                                if (!isNaN(d.getTime())) {
+                                                    setDateStatusUpdated(d);
+                                                }
+                                            } catch (err) { }
                                         }}
-                                        className="bg-[#1e293b] border-slate-700 text-white [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-60"
+                                        className="bg-[#1e293b] border-slate-700 text-white [color-scheme:dark]"
                                     />
                                 </div>
                             </div>
@@ -995,34 +1027,34 @@ const AddProcurement: React.FC = () => {
                                         {/* Pre-Procurement */}
                                         <div className="space-y-2">
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                <MonitoringDateField label="Received PR to Action" date={receivedPrDate} setDate={(d: Date | undefined) => { setReceivedPrDate(d); if (!d) { setPrDeliberatedDate(undefined); setPublishedDate(undefined); setPreBidDate(undefined); setBidOpeningDate(undefined); setBidEvaluationDate(undefined); setBacResolutionDate(undefined); setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} activeColor="blue" />
-                                                <MonitoringDateField label="PR Deliberated" date={prDeliberatedDate} setDate={(d: Date | undefined) => { setPrDeliberatedDate(d); if (!d) { setPublishedDate(undefined); setPreBidDate(undefined); setBidOpeningDate(undefined); setBidEvaluationDate(undefined); setBacResolutionDate(undefined); setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!receivedPrDate} activeColor="blue" />
-                                                <MonitoringDateField label="Published" date={publishedDate} setDate={(d: Date | undefined) => { setPublishedDate(d); if (!d) { setPreBidDate(undefined); setBidOpeningDate(undefined); setBidEvaluationDate(undefined); setBacResolutionDate(undefined); setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!prDeliberatedDate} activeColor="blue" />
+                                                <MonitoringDateField label="Received PR to Action" value={receivedPrDate} setValue={(v: string) => { setReceivedPrDate(v); if (!v) { setPrDeliberatedDate(''); setPublishedDate(''); setPreBidDate(''); setBidOpeningDate(''); setBidEvaluationDate(''); setBacResolutionDate(''); setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} activeColor="blue" />
+                                                <MonitoringDateField label="PR Deliberated" value={prDeliberatedDate} setValue={(v: string) => { setPrDeliberatedDate(v); if (!v) { setPublishedDate(''); setPreBidDate(''); setBidOpeningDate(''); setBidEvaluationDate(''); setBacResolutionDate(''); setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!receivedPrDate} activeColor="blue" />
+                                                <MonitoringDateField label="Published" value={publishedDate} setValue={(v: string) => { setPublishedDate(v); if (!v) { setPreBidDate(''); setBidOpeningDate(''); setBidEvaluationDate(''); setBacResolutionDate(''); setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!prDeliberatedDate} activeColor="blue" />
                                             </div>
                                         </div>
 
                                         {/* Bidding Proper */}
                                         <div className="space-y-2">
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                <MonitoringDateField label="Pre-Bid" date={preBidDate} setDate={(d: Date | undefined) => { setPreBidDate(d); if (!d) { setBidOpeningDate(undefined); setBidEvaluationDate(undefined); setBacResolutionDate(undefined); setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!publishedDate} activeColor="purple" />
-                                                <MonitoringDateField label="Bid Opening" date={bidOpeningDate} setDate={(d: Date | undefined) => { setBidOpeningDate(d); if (!d) { setBidEvaluationDate(undefined); setBacResolutionDate(undefined); setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!preBidDate} activeColor="purple" />
-                                                <MonitoringDateField label="Bid Evaluation Report" date={bidEvaluationDate} setDate={(d: Date | undefined) => { setBidEvaluationDate(d); if (!d) { setBacResolutionDate(undefined); setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!bidOpeningDate} activeColor="purple" />
+                                                <MonitoringDateField label="Pre-Bid" value={preBidDate} setValue={(v: string) => { setPreBidDate(v); if (!v) { setBidOpeningDate(''); setBidEvaluationDate(''); setBacResolutionDate(''); setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!publishedDate} activeColor="purple" />
+                                                <MonitoringDateField label="Bid Opening" value={bidOpeningDate} setValue={(v: string) => { setBidOpeningDate(v); if (!v) { setBidEvaluationDate(''); setBacResolutionDate(''); setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!preBidDate} activeColor="purple" />
+                                                <MonitoringDateField label="Bid Evaluation Report" value={bidEvaluationDate} setValue={(v: string) => { setBidEvaluationDate(v); if (!v) { setBacResolutionDate(''); setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!bidOpeningDate} activeColor="purple" />
                                             </div>
                                         </div>
 
                                         {/* Award */}
                                         <div className="space-y-2">
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                <MonitoringDateField label="BAC Resolution" date={bacResolutionDate} setDate={(d: Date | undefined) => { setBacResolutionDate(d); if (!d) { setPostQualDate(undefined); setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!bidEvaluationDate} activeColor="emerald" />
-                                                <MonitoringDateField label="Post Qualification" date={postQualDate} setDate={(d: Date | undefined) => { setPostQualDate(d); if (!d) { setPostQualReportDate(undefined); setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!bacResolutionDate} activeColor="emerald" />
-                                                <MonitoringDateField label="Post Qualification Report" date={postQualReportDate} setDate={(d: Date | undefined) => { setPostQualReportDate(d); if (!d) { setForwardedOapiDate(undefined); setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!postQualDate} activeColor="emerald" />
-                                                <MonitoringDateField label="Forwarded to OAPIA" date={forwardedOapiDate} setDate={(d: Date | undefined) => { setForwardedOapiDate(d); if (!d) { setNoaDate(undefined); setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!postQualReportDate} activeColor="emerald" />
-                                                <MonitoringDateField label="Notice of Award" date={noaDate} setDate={(d: Date | undefined) => { setNoaDate(d); if (!d) { setContractDate(undefined); setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!forwardedOapiDate} activeColor="emerald" />
-                                                <MonitoringDateField label="Contract Date" date={contractDate} setDate={(d: Date | undefined) => { setContractDate(d); if (!d) { setNtpDate(undefined); setAwardedToDate(undefined); } }} isDisabled={!noaDate} activeColor="emerald" />
-                                                <MonitoringDateField label="Notice to Proceed" date={ntpDate} setDate={(d: Date | undefined) => { setNtpDate(d); if (!d) { setAwardedToDate(undefined); } }} isDisabled={!contractDate} activeColor="emerald" />
+                                                <MonitoringDateField label="BAC Resolution" value={bacResolutionDate} setValue={(v: string) => { setBacResolutionDate(v); if (!v) { setPostQualDate(''); setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!bidEvaluationDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Post Qualification" value={postQualDate} setValue={(v: string) => { setPostQualDate(v); if (!v) { setPostQualReportDate(''); setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!bacResolutionDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Post Qualification Report" value={postQualReportDate} setValue={(v: string) => { setPostQualReportDate(v); if (!v) { setForwardedOapiDate(''); setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!postQualDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Forwarded to OAPIA" value={forwardedOapiDate} setValue={(v: string) => { setForwardedOapiDate(v); if (!v) { setNoaDate(''); setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!postQualReportDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Notice of Award" value={noaDate} setValue={(v: string) => { setNoaDate(v); if (!v) { setContractDate(''); setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!forwardedOapiDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Contract Date" value={contractDate} setValue={(v: string) => { setContractDate(v); if (!v) { setNtpDate(''); setAwardedToDate(''); } }} isDisabled={!noaDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Notice to Proceed" value={ntpDate} setValue={(v: string) => { setNtpDate(v); if (!v) { setAwardedToDate(''); } }} isDisabled={!contractDate} activeColor="emerald" />
 
                                                 {/* Final Step: Awarded to Supplier Date */}
-                                                <MonitoringDateField label="Awarded to Supplier" date={awardedToDate} setDate={(d: Date | undefined) => setAwardedToDate(d)} isDisabled={!ntpDate} activeColor="emerald" />
+                                                <MonitoringDateField label="Awarded to Supplier" value={awardedToDate} setValue={(v: string) => setAwardedToDate(v)} isDisabled={!ntpDate} activeColor="emerald" />
                                             </div>
                                         </div>
                                     </>
@@ -1031,19 +1063,50 @@ const AddProcurement: React.FC = () => {
                                         {/* Pre-Procurement */}
                                         <div className="space-y-2">
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                <MonitoringDateField label="Received PR to Action" date={receivedPrDate} setDate={(d: Date | undefined) => { setReceivedPrDate(d); if (!d) { setPrDeliberatedDate(undefined); setPublishedDate(undefined); setRfqCanvassDate(undefined); setRfqOpeningDate(undefined); setBacResolutionDate(undefined); setForwardedGsdDate(undefined); } }} activeColor="blue" />
-                                                <MonitoringDateField label="PR Deliberated" date={prDeliberatedDate} setDate={(d: Date | undefined) => { setPrDeliberatedDate(d); if (!d) { setPublishedDate(undefined); setRfqCanvassDate(undefined); setRfqOpeningDate(undefined); setBacResolutionDate(undefined); setForwardedGsdDate(undefined); } }} isDisabled={!receivedPrDate} activeColor="blue" />
-                                                <MonitoringDateField label="Published" date={publishedDate} setDate={(d: Date | undefined) => { setPublishedDate(d); if (!d) { setRfqCanvassDate(undefined); setRfqOpeningDate(undefined); setBacResolutionDate(undefined); setForwardedGsdDate(undefined); } }} isDisabled={!prDeliberatedDate} activeColor="blue" />
+                                                <MonitoringDateField label="Received PR to Action" value={receivedPrDate} setValue={(v: string) => {
+                                                    setReceivedPrDate(v); if (!v) {
+                                                        setPrDeliberatedDate(''); setPublishedDate(''); setRfqCanvassDate(''); setRfqOpeningDate(''); setBacResolutionDate(''); setForwardedGsdDate('');
+                                                        setPoNtpForwardedGsdDate('');
+                                                    }
+                                                }} activeColor="blue" />
+                                                <MonitoringDateField label="PR Deliberated" value={prDeliberatedDate} setValue={(v: string) => {
+                                                    setPrDeliberatedDate(v); if (!v) {
+                                                        setPublishedDate(''); setRfqCanvassDate(''); setRfqOpeningDate(''); setBacResolutionDate(''); setForwardedGsdDate('');
+                                                        setPoNtpForwardedGsdDate('');
+                                                    }
+                                                }} isDisabled={!receivedPrDate} activeColor="blue" />
+                                                <MonitoringDateField label="Published" value={publishedDate} setValue={(v: string) => {
+                                                    setPublishedDate(v); if (!v) {
+                                                        setRfqCanvassDate(''); setRfqOpeningDate(''); setBacResolutionDate(''); setForwardedGsdDate('');
+                                                        setPoNtpForwardedGsdDate('');
+                                                    }
+                                                }} isDisabled={!prDeliberatedDate} activeColor="blue" />
                                             </div>
                                         </div>
 
                                         {/* Canvassing */}
                                         <div className="space-y-2">
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                                <MonitoringDateField label="RFQ to Canvass" date={rfqCanvassDate} setDate={(d: Date | undefined) => { setRfqCanvassDate(d); if (!d) { setRfqOpeningDate(undefined); setBacResolutionDate(undefined); setForwardedGsdDate(undefined); } }} isDisabled={!publishedDate} activeColor="purple" />
-                                                <MonitoringDateField label="RFQ Opening" date={rfqOpeningDate} setDate={(d: Date | undefined) => { setRfqOpeningDate(d); if (!d) { setBacResolutionDate(undefined); setForwardedGsdDate(undefined); } }} isDisabled={!rfqCanvassDate} activeColor="purple" />
-                                                <MonitoringDateField label="BAC Resolution" date={bacResolutionDate} setDate={(d: Date | undefined) => { setBacResolutionDate(d); if (!d) { setForwardedGsdDate(undefined); } }} isDisabled={!rfqOpeningDate} activeColor="purple" />
-                                                <MonitoringDateField label="Forwarded to GSD for P.O" date={forwardedGsdDate} setDate={(d: Date | undefined) => { setForwardedGsdDate(d); }} isDisabled={!bacResolutionDate} activeColor="purple" />
+                                                <MonitoringDateField label="RFQ to Canvass" value={rfqCanvassDate} setValue={(v: string) => {
+                                                    setRfqCanvassDate(v); if (!v) {
+                                                        setRfqOpeningDate(''); setBacResolutionDate(''); setForwardedGsdDate('');
+                                                        setPoNtpForwardedGsdDate('');
+                                                    }
+                                                }} isDisabled={!publishedDate} activeColor="purple" />
+                                                <MonitoringDateField label="RFQ Opening" value={rfqOpeningDate} setValue={(v: string) => {
+                                                    setRfqOpeningDate(v); if (!v) {
+                                                        setBacResolutionDate(''); setForwardedGsdDate('');
+                                                        setPoNtpForwardedGsdDate('');
+                                                    }
+                                                }} isDisabled={!rfqCanvassDate} activeColor="purple" />
+                                                <MonitoringDateField label="BAC Resolution" value={bacResolutionDate} setValue={(v: string) => {
+                                                    setBacResolutionDate(v); if (!v) {
+                                                        setForwardedGsdDate('');
+                                                        setPoNtpForwardedGsdDate('');
+                                                    }
+                                                }} isDisabled={!rfqOpeningDate} activeColor="purple" />
+                                                <MonitoringDateField label="Forwarded to GSD for P.O" value={forwardedGsdDate} setValue={(v: string) => { setForwardedGsdDate(v); if (!v) { setPoNtpForwardedGsdDate(''); } }} isDisabled={!bacResolutionDate} activeColor="purple" />
+                                                <MonitoringDateField label="Add PO/NTP forwarded to GSD" value={poNtpForwardedGsdDate} setValue={(v: string) => { setPoNtpForwardedGsdDate(v); }} isDisabled={!forwardedGsdDate} activeColor="purple" />
                                             </div>
                                         </div>
                                     </>
@@ -1252,18 +1315,8 @@ const AddProcurement: React.FC = () => {
 export default AddProcurement;
 
 
-// Extracted Components to prevent focus loss
-
-const MonitoringDateField = ({ label, date, setDate, isDisabled = false, activeColor = 'blue' }: any) => {
-    const inputRef = React.useRef<HTMLInputElement>(null);
-    const dateStr = date ? format(date, 'yyyy-MM-dd') : '';
-
-    React.useEffect(() => {
-        if (inputRef.current && inputRef.current.value !== dateStr) {
-            inputRef.current.value = dateStr;
-        }
-    }, [dateStr]);
-
+// Extracted Components to prevent focus loss\n
+const MonitoringDateField = ({ label, value, setValue, isDisabled = false, activeColor = 'blue' }: any) => {
     const activeClasses = {
         blue: { border: 'border-blue-500/30', bg: 'bg-blue-900/10', text: 'text-blue-400', checkBg: 'data-[state=checked]:bg-blue-600', checkBorder: 'data-[state=checked]:border-blue-600', ring: 'focus:ring-blue-500' },
         purple: { border: 'border-purple-500/30', bg: 'bg-purple-900/10', text: 'text-purple-400', checkBg: 'data-[state=checked]:bg-purple-600', checkBorder: 'data-[state=checked]:border-purple-600', ring: 'focus:ring-purple-500' },
@@ -1271,34 +1324,24 @@ const MonitoringDateField = ({ label, date, setDate, isDisabled = false, activeC
     }[activeColor] as any;
 
     return (
-        <div className={`space-y-2 p-3 rounded-lg border transition-all ${isDisabled ? 'border-slate-800 bg-slate-900/30 opacity-50' : date ? `${activeClasses.border} ${activeClasses.bg}` : 'border-slate-700 bg-slate-800/30'}`}>
+        <div className={`space-y-2 p-3 rounded-lg border transition-all ${isDisabled ? 'border-slate-800 bg-slate-900/30 opacity-50' : value ? `${activeClasses.border} ${activeClasses.bg}` : 'border-slate-700 bg-slate-800/30'}`}>
             <div className="flex items-center gap-2">
                 <Checkbox
-                    checked={!!date}
-                    onCheckedChange={(c) => setDate(c ? new Date() : undefined)}
+                    checked={!!value}
+                    onCheckedChange={(c) => setValue(c ? format(new Date(), 'MM/dd/yyyy') : '')}
                     disabled={isDisabled}
                     className={`h-4 w-4 border-slate-500 ${activeClasses.checkBg} ${activeClasses.checkBorder} disabled:opacity-50`}
                 />
-                <span className={`text-sm font-medium ${date ? activeClasses.text : isDisabled ? 'text-slate-600' : 'text-slate-300'}`}>{label}</span>
+                <span className={`text-sm font-medium ${value ? activeClasses.text : isDisabled ? 'text-slate-600' : 'text-slate-300'}`}>{label}</span>
             </div>
             <div className="pl-6">
                 <input
-                    ref={inputRef}
-                    type="date"
-                    max="9999-12-31"
-                    defaultValue={dateStr}
-                    onBlur={(e) => {
-                        const val = e.target.value;
-                        if (val !== dateStr) setDate(val ? new Date(val) : undefined);
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            const val = e.currentTarget.value;
-                            if (val !== dateStr) setDate(val ? new Date(val) : undefined);
-                        }
-                    }}
+                    type="text"
+                    value={value || ''}
+                    placeholder="Progress/Date..."
+                    onChange={(e) => setValue(e.target.value)}
                     disabled={isDisabled}
-                    className={`h-8 px-2 rounded-md bg-[#0f172a] border border-slate-700 text-slate-300 text-xs w-full outline-none ${activeClasses.ring} ${isDisabled ? 'cursor-not-allowed opacity-50' : ''} [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:invert`}
+                    className={`h-8 px-2 rounded-md bg-[#0f172a] border border-slate-700 text-slate-300 text-xs w-full outline-none ${activeClasses.ring} ${isDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
                 />
             </div>
         </div>
@@ -1314,7 +1357,7 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
                     variant="outline"
                     className={`h-9 w-full justify-between text-left font-normal bg-[#1e293b] border-slate-700 text-white hover:bg-[#253045] ${!date && "text-muted-foreground"}`}
                 >
-                    <span>{date ? format(date, "PPP") : "Pick date"}</span>
+                    <span>{date ? "Set" : "Pick date"}</span>
                     <CalendarIcon className="ml-2 h-4 w-4 text-white opacity-100" />
                 </Button>
             </PopoverTrigger>
@@ -1330,8 +1373,3 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
         </Popover>
     </div>
 );
-
-
-
-
-
