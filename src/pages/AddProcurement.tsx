@@ -897,11 +897,11 @@ const AddProcurement: React.FC = () => {
                     </div>
                 </div>
 
-                /* {/* TAB 3 (cont): Documents â€” Additional Info + continuation */}
-                <div className={activeTab !== 'documents' ? 'hidden' : ''} id="tab-documents-extra">
+               {/* TAB 3 (cont): Documents â€” Additional Info + continuation */}
+                {/* <div className={activeTab !== 'documents' ? 'hidden' : ''} id="tab-documents-extra"> */}
 
                     {/* TAB 3 (cont): Documents — Additional Info */}
-                    <Card className="border-none bg-[#0f172a] shadow-lg">
+                    {/* <Card className="border-none bg-[#0f172a] shadow-lg">
                         <CardContent className="p-6 space-y-6">
                             <h3 className="text-lg font-semibold text-white border-b border-slate-800 pb-2">
                                 Additional Information
@@ -937,7 +937,7 @@ const AddProcurement: React.FC = () => {
                                 />
                             </div>
                         </CardContent>
-                    </Card> */
+                    </Card> */}
 
                     {/* Documents Extra Nav Buttons */}
                     <div className="flex justify-between mt-4">
@@ -1218,6 +1218,7 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
         </Popover>
     </div>
 );
+
 
 
 
