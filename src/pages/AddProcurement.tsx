@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { getProcessSteps, isStepDisabled } from '@/lib/validation-utils';
 import { useData } from '@/contexts/DataContext';
 import { Shelf, Folder, Box, ProcurementStatus, Division, ProcurementProcessStatus } from '@/types/procurement';
 import { toast } from 'sonner';
-import { Loader2, Save, CalendarIcon, Archive, FolderTree, Plus, X } from 'lucide-react';
+import { Loader2, Save, CalendarIcon, Archive, FolderTree, Plus, X, Trash2 } from 'lucide-react';
 import { format, addYears } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { CHECKLIST_ITEMS } from '@/lib/constants';
@@ -30,6 +30,26 @@ import {
 } from '@/components/ui/popover';
 import { constructPrNumber, getNextPrSequence, formatSequence } from '@/lib/pr-number-utils';
 import { formatNumberWithCommas, removeCommas, handleNumberInput, getDisplayValue } from '@/lib/number-utils';
+
+// ─── localStorage helpers ────────────────────────────────────────────────────
+const getStorageKey = (userEmail: string) => `procureflow_add_form_${userEmail}`;
+
+const loadDraft = (userEmail: string) => {
+    try {
+        const raw = localStorage.getItem(getStorageKey(userEmail));
+        return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+};
+
+const saveDraft = (userEmail: string, data: any) => {
+    try {
+        localStorage.setItem(getStorageKey(userEmail), JSON.stringify(data));
+    } catch { /* quota exceeded or similar */ }
+};
+
+const clearDraft = (userEmail: string) => {
+    try { localStorage.removeItem(getStorageKey(userEmail)); } catch { }
+};
 
 const MONTHS = [
     { value: 'JAN', label: 'January' },
@@ -64,6 +84,7 @@ const AddProcurement: React.FC = () => {
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const { cabinets, shelves, folders, boxes, procurements } = useData(); // cabinets=Drawers, shelves=Cabinets
+    const userEmail = user?.email || 'anonymous';
 
     // Divisions State
     const [divisions, setDivisions] = useState<Division[]>([]);
@@ -73,51 +94,58 @@ const AddProcurement: React.FC = () => {
     const [availableBoxes, setAvailableBoxes] = useState<Box[]>([]);
     const [availableFolders, setAvailableFolders] = useState<Folder[]>([]);
 
+    // ── Load draft once on mount ───────────────────────────────────────────────
+    const draft = loadDraft(userEmail);
+
     // Form Mode
-    const [formMode, setFormMode] = useState<FormMode>('SVP');
-    const [activeTab, setActiveTab] = useState<'basic' | 'monitoring' | 'documents' | 'storage'>('basic');
+    const [formMode, setFormMode] = useState<FormMode>(draft?.formMode || 'SVP');
+    const [activeTab, setActiveTab] = useState<'basic' | 'monitoring' | 'documents' | 'storage'>(draft?.activeTab || 'basic');
 
     // Common Fields
-    const [projectName, setProjectName] = useState(''); // "Particulars"
-    const [description, setDescription] = useState(''); // "Remarks"
-    const [status, setStatus] = useState<ProcurementStatus>('archived'); // Storage Status
-    const [procurementProcessStatus, setProcurementProcessStatus] = useState<ProcurementProcessStatus>('Not yet Acted');
-    const [dateStatusUpdated, setDateStatusUpdated] = useState<Date | undefined>(new Date());
+    const [projectName, setProjectName] = useState(draft?.projectName || '');
+    const [description, setDescription] = useState(draft?.description || '');
+    const [status, setStatus] = useState<ProcurementStatus>(draft?.status || 'archived');
+    const [procurementProcessStatus, setProcurementProcessStatus] = useState<ProcurementProcessStatus>(draft?.procurementProcessStatus || 'Not yet Acted');
+    const [dateStatusUpdated, setDateStatusUpdated] = useState<Date | undefined>(
+        draft?.dateStatusUpdated ? new Date(draft.dateStatusUpdated) : new Date()
+    );
 
     // Financials
-    const [abc, setAbc] = useState<string>('');
-    const [bidAmount, setBidAmount] = useState<string>('');
-    const [supplier, setSupplier] = useState('');
+    const [abc, setAbc] = useState<string>(draft?.abc || '');
+    const [bidAmount, setBidAmount] = useState<string>(draft?.bidAmount || '');
+    const [supplier, setSupplier] = useState(draft?.supplier || '');
 
     // Additional Fields
-    const [notes, setNotes] = useState('');
-    const [staffIncharge, setStaffIncharge] = useState(user?.name || '');
+    const [notes, setNotes] = useState(draft?.notes || '');
+    const [staffIncharge, setStaffIncharge] = useState(draft?.staffIncharge || user?.name || '');
 
-    // Borrowed Information (conditional on status === 'borrowed')
-    const [borrowerName, setBorrowerName] = useState('');
-    const [borrowingDivisionId, setBorrowingDivisionId] = useState('');
-    const [borrowedDate, setBorrowedDate] = useState<Date | undefined>();
+    // Borrowed Information
+    const [borrowerName, setBorrowerName] = useState(draft?.borrowerName || '');
+    const [borrowingDivisionId, setBorrowingDivisionId] = useState(draft?.borrowingDivisionId || '');
+    const [borrowedDate, setBorrowedDate] = useState<Date | undefined>(
+        draft?.borrowedDate ? new Date(draft.borrowedDate) : undefined
+    );
 
     // Date Added
-    const [dateAdded, setDateAdded] = useState<Date | undefined>(new Date());
+    const [dateAdded, setDateAdded] = useState<Date | undefined>(
+        draft?.dateAdded ? new Date(draft.dateAdded) : new Date()
+    );
 
     // PR Number Construction State
-    const [prDivisionId, setPrDivisionId] = useState(''); // Separate from End User Division
-    const [prMonth, setPrMonth] = useState(format(new Date(), 'MMM').toUpperCase());
-    const [prYear, setPrYear] = useState(format(new Date(), 'yy'));
-    const [prSequence, setPrSequence] = useState('001');
-
-
+    const [prDivisionId, setPrDivisionId] = useState(draft?.prDivisionId || '');
+    const [prMonth, setPrMonth] = useState(draft?.prMonth || format(new Date(), 'MMM').toUpperCase());
+    const [prYear, setPrYear] = useState(draft?.prYear || format(new Date(), 'yy'));
+    const [prSequence, setPrSequence] = useState(draft?.prSequence || '001');
 
     // Division Selection (End User)
-    const [selectedDivisionId, setSelectedDivisionId] = useState('');
+    const [selectedDivisionId, setSelectedDivisionId] = useState(draft?.selectedDivisionId || '');
 
     // Storage Location State
-    const [storageMode, setStorageMode] = useState<'shelf' | 'box'>('shelf');
-    const [cabinetId, setCabinetId] = useState(''); // Drawer ID
-    const [shelfId, setShelfId] = useState('');     // Cabinet ID
-    const [folderId, setFolderId] = useState('');   // Folder ID
-    const [boxId, setBoxId] = useState('');         // Box ID
+    const [storageMode, setStorageMode] = useState<'shelf' | 'box'>(draft?.storageMode || 'shelf');
+    const [cabinetId, setCabinetId] = useState(draft?.cabinetId || '');
+    const [shelfId, setShelfId] = useState(draft?.shelfId || '');
+    const [folderId, setFolderId] = useState(draft?.folderId || '');
+    const [boxId, setBoxId] = useState(draft?.boxId || '');
 
     // Folder Creation in Box
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -125,33 +153,156 @@ const AddProcurement: React.FC = () => {
     const [newFolderCode, setNewFolderCode] = useState('');
 
     // Monitoring Dates - Common
-    const [receivedPrDate, setReceivedPrDate] = useState<Date>();
-    const [prDeliberatedDate, setPrDeliberatedDate] = useState<Date>();
-    const [publishedDate, setPublishedDate] = useState<Date>(); // Procurement Date
-    const [rfqCanvassDate, setRfqCanvassDate] = useState<Date>();
-    const [rfqOpeningDate, setRfqOpeningDate] = useState<Date>();
-    const [bacResolutionDate, setBacResolutionDate] = useState<Date>();
-    const [forwardedGsdDate, setForwardedGsdDate] = useState<Date>();
+    const [receivedPrDate, setReceivedPrDate] = useState<Date | undefined>(
+        draft?.receivedPrDate ? new Date(draft.receivedPrDate) : undefined
+    );
+    const [prDeliberatedDate, setPrDeliberatedDate] = useState<Date | undefined>(
+        draft?.prDeliberatedDate ? new Date(draft.prDeliberatedDate) : undefined
+    );
+    const [publishedDate, setPublishedDate] = useState<Date | undefined>(
+        draft?.publishedDate ? new Date(draft.publishedDate) : undefined
+    );
+    const [rfqCanvassDate, setRfqCanvassDate] = useState<Date | undefined>(
+        draft?.rfqCanvassDate ? new Date(draft.rfqCanvassDate) : undefined
+    );
+    const [rfqOpeningDate, setRfqOpeningDate] = useState<Date | undefined>(
+        draft?.rfqOpeningDate ? new Date(draft.rfqOpeningDate) : undefined
+    );
+    const [bacResolutionDate, setBacResolutionDate] = useState<Date | undefined>(
+        draft?.bacResolutionDate ? new Date(draft.bacResolutionDate) : undefined
+    );
+    const [forwardedGsdDate, setForwardedGsdDate] = useState<Date | undefined>(
+        draft?.forwardedGsdDate ? new Date(draft.forwardedGsdDate) : undefined
+    );
 
     // Monitoring Dates - Regular Bidding specific
-    const [preBidDate, setPreBidDate] = useState<Date>();
-    const [bidOpeningDate, setBidOpeningDate] = useState<Date>();
-    const [bidEvaluationDate, setBidEvaluationDate] = useState<Date>();
-    const [postQualDate, setPostQualDate] = useState<Date>();
-    const [postQualReportDate, setPostQualReportDate] = useState<Date>();
-    const [forwardedOapiDate, setForwardedOapiDate] = useState<Date>();
-    const [noaDate, setNoaDate] = useState<Date>();
-    const [contractDate, setContractDate] = useState<Date>();
-    const [ntpDate, setNtpDate] = useState<Date>();
-    const [awardedToDate, setAwardedToDate] = useState<Date>();
+    const [preBidDate, setPreBidDate] = useState<Date | undefined>(
+        draft?.preBidDate ? new Date(draft.preBidDate) : undefined
+    );
+    const [bidOpeningDate, setBidOpeningDate] = useState<Date | undefined>(
+        draft?.bidOpeningDate ? new Date(draft.bidOpeningDate) : undefined
+    );
+    const [bidEvaluationDate, setBidEvaluationDate] = useState<Date | undefined>(
+        draft?.bidEvaluationDate ? new Date(draft.bidEvaluationDate) : undefined
+    );
+    const [postQualDate, setPostQualDate] = useState<Date | undefined>(
+        draft?.postQualDate ? new Date(draft.postQualDate) : undefined
+    );
+    const [postQualReportDate, setPostQualReportDate] = useState<Date | undefined>(
+        draft?.postQualReportDate ? new Date(draft.postQualReportDate) : undefined
+    );
+    const [forwardedOapiDate, setForwardedOapiDate] = useState<Date | undefined>(
+        draft?.forwardedOapiDate ? new Date(draft.forwardedOapiDate) : undefined
+    );
+    const [noaDate, setNoaDate] = useState<Date | undefined>(
+        draft?.noaDate ? new Date(draft.noaDate) : undefined
+    );
+    const [contractDate, setContractDate] = useState<Date | undefined>(
+        draft?.contractDate ? new Date(draft.contractDate) : undefined
+    );
+    const [ntpDate, setNtpDate] = useState<Date | undefined>(
+        draft?.ntpDate ? new Date(draft.ntpDate) : undefined
+    );
+    const [awardedToDate, setAwardedToDate] = useState<Date | undefined>(
+        draft?.awardedToDate ? new Date(draft.awardedToDate) : undefined
+    );
 
-    // Checklist State (for Regular Bidding mostly, but keeping structure)
-    // We'll treat checklist items more as date tracking per user request
-    const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+    // Checklist State
+    const [checklist, setChecklist] = useState<Record<string, boolean>>(draft?.checklist || {});
 
-    // Monitoring Process Checkboxes for progression
-    // logic to disable steps based on previous steps
+    // ── Save draft to localStorage whenever any field changes ─────────────────
+    useEffect(() => {
+        saveDraft(userEmail, {
+            formMode, activeTab,
+            projectName, description, status, procurementProcessStatus,
+            dateStatusUpdated: dateStatusUpdated?.toISOString(),
+            abc, bidAmount, supplier, notes, staffIncharge,
+            borrowerName, borrowingDivisionId,
+            borrowedDate: borrowedDate?.toISOString(),
+            dateAdded: dateAdded?.toISOString(),
+            prDivisionId, prMonth, prYear, prSequence,
+            selectedDivisionId,
+            storageMode, cabinetId, shelfId, folderId, boxId,
+            receivedPrDate: receivedPrDate?.toISOString(),
+            prDeliberatedDate: prDeliberatedDate?.toISOString(),
+            publishedDate: publishedDate?.toISOString(),
+            rfqCanvassDate: rfqCanvassDate?.toISOString(),
+            rfqOpeningDate: rfqOpeningDate?.toISOString(),
+            bacResolutionDate: bacResolutionDate?.toISOString(),
+            forwardedGsdDate: forwardedGsdDate?.toISOString(),
+            preBidDate: preBidDate?.toISOString(),
+            bidOpeningDate: bidOpeningDate?.toISOString(),
+            bidEvaluationDate: bidEvaluationDate?.toISOString(),
+            postQualDate: postQualDate?.toISOString(),
+            postQualReportDate: postQualReportDate?.toISOString(),
+            forwardedOapiDate: forwardedOapiDate?.toISOString(),
+            noaDate: noaDate?.toISOString(),
+            contractDate: contractDate?.toISOString(),
+            ntpDate: ntpDate?.toISOString(),
+            awardedToDate: awardedToDate?.toISOString(),
+            checklist,
+        });
+    }, [
+        formMode, activeTab, projectName, description, status, procurementProcessStatus,
+        dateStatusUpdated, abc, bidAmount, supplier, notes, staffIncharge,
+        borrowerName, borrowingDivisionId, borrowedDate, dateAdded,
+        prDivisionId, prMonth, prYear, prSequence, selectedDivisionId,
+        storageMode, cabinetId, shelfId, folderId, boxId,
+        receivedPrDate, prDeliberatedDate, publishedDate, rfqCanvassDate,
+        rfqOpeningDate, bacResolutionDate, forwardedGsdDate, preBidDate,
+        bidOpeningDate, bidEvaluationDate, postQualDate, postQualReportDate,
+        forwardedOapiDate, noaDate, contractDate, ntpDate, awardedToDate, checklist,
+    ]);
 
+    // ── Clear Form handler ────────────────────────────────────────────────────
+    const handleClearForm = useCallback(() => {
+        clearDraft(userEmail);
+        setFormMode('SVP');
+        setActiveTab('basic');
+        setProjectName('');
+        setDescription('');
+        setStatus('archived');
+        setProcurementProcessStatus('Not yet Acted');
+        setDateStatusUpdated(new Date());
+        setAbc('');
+        setBidAmount('');
+        setSupplier('');
+        setNotes('');
+        setStaffIncharge(user?.name || '');
+        setBorrowerName('');
+        setBorrowingDivisionId('');
+        setBorrowedDate(undefined);
+        setDateAdded(new Date());
+        setPrDivisionId('');
+        setPrMonth(format(new Date(), 'MMM').toUpperCase());
+        setPrYear(format(new Date(), 'yy'));
+        setPrSequence('001');
+        setSelectedDivisionId('');
+        setStorageMode('shelf');
+        setCabinetId('');
+        setShelfId('');
+        setFolderId('');
+        setBoxId('');
+        setReceivedPrDate(undefined);
+        setPrDeliberatedDate(undefined);
+        setPublishedDate(undefined);
+        setRfqCanvassDate(undefined);
+        setRfqOpeningDate(undefined);
+        setBacResolutionDate(undefined);
+        setForwardedGsdDate(undefined);
+        setPreBidDate(undefined);
+        setBidOpeningDate(undefined);
+        setBidEvaluationDate(undefined);
+        setPostQualDate(undefined);
+        setPostQualReportDate(undefined);
+        setForwardedOapiDate(undefined);
+        setNoaDate(undefined);
+        setContractDate(undefined);
+        setNtpDate(undefined);
+        setAwardedToDate(undefined);
+        setChecklist({});
+        toast.success('Form cleared');
+    }, [userEmail, user?.name]);
 
 
     // Auto-generate Sequence based on PR Division and Year
@@ -394,9 +545,10 @@ const AddProcurement: React.FC = () => {
             );
 
             toast.success('File record added successfully');
+            clearDraft(userEmail); // Clear saved draft after successful submit
             // Navigate to appropriate list
             if (formMode === 'SVP') {
-                navigate('/procurement/list?type=SVP'); // Pending implementation of dedicated route
+                navigate('/procurement/list?type=SVP');
             } else {
                 navigate('/procurement/list?type=Regular');
             }
@@ -434,19 +586,33 @@ const AddProcurement: React.FC = () => {
                     <h1 className="text-3xl font-bold text-white">Add Procurement</h1>
                     <p className="text-slate-400 mt-1">Create a new record</p>
                 </div>
-                <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
-                    <button
-                        onClick={() => setFormMode('SVP')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${formMode === 'SVP' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Clear Form Button */}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleClearForm}
+                        className="flex items-center gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-400 transition-all"
                     >
-                        Small Value Procurement
-                    </button>
-                    <button
-                        onClick={() => setFormMode('Regular')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${formMode === 'Regular' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        Regular Bidding
-                    </button>
+                        <Trash2 className="h-4 w-4" />
+                        Clear Form
+                    </Button>
+                    {/* Procurement Type Toggle */}
+                    <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
+                        <button
+                            onClick={() => setFormMode('SVP')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${formMode === 'SVP' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            Small Value Procurement
+                        </button>
+                        <button
+                            onClick={() => setFormMode('Regular')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${formMode === 'Regular' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            Regular Bidding
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -897,60 +1063,6 @@ const AddProcurement: React.FC = () => {
                     </div>
                 </div>
 
-                {/* TAB 3 (cont): Documents â€” Additional Info + continuation */}
-                <div className={activeTab !== 'documents' ? 'hidden' : ''} id="tab-documents-extra">
-
-                    {/* TAB 3 (cont): Documents — Additional Info */}
-                    <Card className="border-none bg-[#0f172a] shadow-lg">
-                        <CardContent className="p-6 space-y-6">
-                            <h3 className="text-lg font-semibold text-white border-b border-slate-800 pb-2">
-                                Additional Information
-                            </h3>
-                            <div className="grid gap-6 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Supplier / Awarded To <span className="text-slate-500 text-xs">(Optional)</span></Label>
-                                    <Input
-                                        value={supplier}
-                                        onChange={(e) => setSupplier(e.target.value)}
-                                        placeholder="Enter supplier or company name..."
-                                        className="bg-[#1e293b] border-slate-700 text-white"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-slate-300">Staff In Charge <span className="text-red-400">*</span></Label>
-                                    <Input
-                                        value={staffIncharge}
-                                        onChange={(e) => setStaffIncharge(e.target.value)}
-                                        placeholder="Person responsible for this record..."
-                                        className="bg-[#1e293b] border-slate-700 text-white"
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-slate-300">Notes <span className="text-slate-500 text-xs">(Optional)</span></Label>
-                                <Textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Enter any additional notes or important information..."
-                                    className="bg-[#1e293b] border-slate-700 text-white min-h-[80px] resize-y"
-                                    rows={3}
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Documents Extra Nav Buttons */}
-                    <div className="flex justify-between mt-4">
-                        <Button type="button" variant="outline" onClick={() => setActiveTab('monitoring')} className="border-slate-700 text-slate-300 hover:bg-slate-800 px-8">
-                            &larr; Previous: Monitoring
-                        </Button>
-                        <Button type="button" onClick={() => setActiveTab('storage')} disabled={!canGoToStorage} className={`px-8 text-white ${!canGoToStorage ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
-                            Next: Storage &rarr;
-                        </Button>
-                    </div>
-                </div>
-
-
                 {/* TAB 4: Storage Location */}
                 <div className={activeTab !== 'storage' ? 'hidden' : ''}>
                     <Card className="border-none bg-[#0f172a] shadow-lg">
@@ -1218,3 +1330,8 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
         </Popover>
     </div>
 );
+
+
+
+
+

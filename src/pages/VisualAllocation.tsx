@@ -292,10 +292,10 @@ const VisualAllocation: React.FC = () => {
                 {/* Note: Files breadcrumb for Box mode handled by generic 'selectedFolderId' check above if we want, or we can explicit it here */}
             </div>
 
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
-                    <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Visual Allocation</h1>
-                    <p className="text-slate-400">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-2">Visual Allocation</h1>
+                    <p className="text-slate-400 text-sm">
                         {viewMode === 'shelves' && 'Select a Shelf to view its contents.'}
                         {viewMode === 'cabinets' && `Viewing Cabinets in Shelf ${currentShelf?.name}`}
                         {viewMode === 'folders' && `Viewing Folders in Cabinet ${currentCabinet?.name}`}
@@ -305,42 +305,44 @@ const VisualAllocation: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Visual Toggle between Shelf and Box Storage */}
-                {!selectedShelfId && !selectedBoxId && (
-                    <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
-                        <Button
-                            variant={viewMode === 'shelves' ? 'secondary' : 'ghost'}
-                            size="sm"
-                            onClick={() => { setViewMode('shelves'); setSelectedBoxId(null); }}
-                            className={viewMode === 'shelves' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400 hover:text-white'}
-                        >
-                            <Grid className="h-4 w-4 mr-2" />
-                            Shelf Storage
-                        </Button>
-                        <Button
-                            variant={viewMode === 'boxes' ? 'secondary' : 'ghost'}
-                            size="sm"
-                            onClick={() => { setViewMode('boxes'); setSelectedShelfId(null); setSelectedCabinetId(null); setSelectedFolderId(null); }}
-                            className={viewMode === 'boxes' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400 hover:text-white'}
-                        >
-                            <Archive className="h-4 w-4 mr-2" />
-                            Box Storage
-                        </Button>
-                    </div>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* Visual Toggle between Shelf and Box Storage */}
+                    {!selectedShelfId && !selectedBoxId && (
+                        <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700">
+                            <Button
+                                variant={viewMode === 'shelves' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                onClick={() => { setViewMode('shelves'); setSelectedBoxId(null); }}
+                                className={viewMode === 'shelves' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400 hover:text-white'}
+                            >
+                                <Grid className="h-4 w-4 mr-2" />
+                                Shelf Storage
+                            </Button>
+                            <Button
+                                variant={viewMode === 'boxes' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                onClick={() => { setViewMode('boxes'); setSelectedShelfId(null); setSelectedCabinetId(null); setSelectedFolderId(null); }}
+                                className={viewMode === 'boxes' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-400 hover:text-white'}
+                            >
+                                <Archive className="h-4 w-4 mr-2" />
+                                Box Storage
+                            </Button>
+                        </div>
+                    )}
 
-                {(viewMode !== 'shelves' && viewMode !== 'boxes') && (
-                    <Button variant="outline" onClick={goBack} className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700">
-                        <ArrowLeft className="h-4 w-4" /> Up One Level
-                    </Button>
-                )}
+                    {(viewMode !== 'shelves' && viewMode !== 'boxes') && (
+                        <Button variant="outline" onClick={goBack} className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700">
+                            <ArrowLeft className="h-4 w-4" /> Up One Level
+                        </Button>
+                    )}
+                </div>
             </div>
 
-            <div className="bg-[#0f172a] p-8 rounded-xl border border-slate-800 min-h-[60vh] shadow-inner">
+            <div className="bg-[#0f172a] p-4 sm:p-6 lg:p-8 rounded-xl border border-slate-800 min-h-[60vh] shadow-inner">
 
                 {/* SHELVES VIEW (Racks) */}
                 {viewMode === 'shelves' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in zoom-in-50 duration-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8 animate-in zoom-in-50 duration-300">
                         {shelves.map(shelf => (
                             <div
                                 key={shelf.id}
@@ -388,7 +390,7 @@ const VisualAllocation: React.FC = () => {
 
                 {/* CABINETS VIEW (Drawers) */}
                 {viewMode === 'cabinets' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in zoom-in-50 duration-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in zoom-in-50 duration-300">
                         {getCabinetsForShelf(selectedShelfId!).map(cabinet => (
                             <div
                                 key={cabinet.id}
@@ -420,7 +422,7 @@ const VisualAllocation: React.FC = () => {
 
                 {/* FOLDERS VIEW (Tabs) */}
                 {viewMode === 'folders' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-in zoom-in-50 duration-300">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6 animate-in zoom-in-50 duration-300">
                         {getFoldersForCabinet(selectedCabinetId!).map(folder => (
                             <div
                                 key={folder.id}
@@ -494,7 +496,7 @@ const VisualAllocation: React.FC = () => {
 
                 {/* BOXES VIEW (Grid) */}
                 {viewMode === 'boxes' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in zoom-in-50 duration-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in zoom-in-50 duration-300">
                         {sortedBoxes.map(box => (
                             <div
                                 key={box.id}
@@ -559,7 +561,7 @@ const VisualAllocation: React.FC = () => {
 
                 {/* BOX FOLDERS VIEW (Tabs) */}
                 {viewMode === 'box_folders' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-in zoom-in-50 duration-300">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6 animate-in zoom-in-50 duration-300">
                         {getFoldersForBox(selectedBoxId!).map(folder => (
                             <div
                                 key={folder.id}

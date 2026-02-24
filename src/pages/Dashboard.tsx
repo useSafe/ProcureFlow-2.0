@@ -286,10 +286,10 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="space-y-6 h-full overflow-auto pb-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-                    <p className="text-slate-400 mt-1">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white">Dashboard</h1>
+                    <p className="text-slate-400 mt-1 text-sm">
                         Overview of your file tracking system {selectedYear !== 'all' && `(${selectedYear})`}
                     </p>
                 </div>
@@ -450,7 +450,7 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                     {/* File Status Distribution Chart */}
                     <Card className="border-none bg-[#0f172a] text-white shadow-lg">
                         <CardHeader>
@@ -524,9 +524,9 @@ const Dashboard: React.FC = () => {
                     </Card>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-5">
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-5">
                     {/* Top Storages Chart (Mixed Drawers & Boxes) */}
-                    <Card className="md:col-span-2 sm:col-span-3 border-none bg-[#0f172a] text-white shadow-lg">
+                    <Card className="md:col-span-2 border-none bg-[#0f172a] text-white shadow-lg">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-base">
                                 <Layers className="h-4 w-4 text-purple-400" />
