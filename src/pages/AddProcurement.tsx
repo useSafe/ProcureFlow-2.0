@@ -897,6 +897,48 @@ const AddProcurement: React.FC = () => {
                     </div>
                 </div>
 
+                /* {/* TAB 3 (cont): Documents â€” Additional Info + continuation */}
+                <div className={activeTab !== 'documents' ? 'hidden' : ''} id="tab-documents-extra">
+
+                    {/* TAB 3 (cont): Documents — Additional Info */}
+                    <Card className="border-none bg-[#0f172a] shadow-lg">
+                        <CardContent className="p-6 space-y-6">
+                            <h3 className="text-lg font-semibold text-white border-b border-slate-800 pb-2">
+                                Additional Information
+                            </h3>
+                            <div className="grid gap-6 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label className="text-slate-300">Supplier / Awarded To <span className="text-slate-500 text-xs">(Optional)</span></Label>
+                                    <Input
+                                        value={supplier}
+                                        onChange={(e) => setSupplier(e.target.value)}
+                                        placeholder="Enter supplier or company name..."
+                                        className="bg-[#1e293b] border-slate-700 text-white"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-slate-300">Staff In Charge <span className="text-red-400">*</span></Label>
+                                    <Input
+                                        value={staffIncharge}
+                                        onChange={(e) => setStaffIncharge(e.target.value)}
+                                        placeholder="Person responsible for this record..."
+                                        className="bg-[#1e293b] border-slate-700 text-white"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-slate-300">Notes <span className="text-slate-500 text-xs">(Optional)</span></Label>
+                                <Textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="Enter any additional notes or important information..."
+                                    className="bg-[#1e293b] border-slate-700 text-white min-h-[80px] resize-y"
+                                    rows={3}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card> */
+
                     {/* Documents Extra Nav Buttons */}
                     <div className="flex justify-between mt-4">
                         <Button type="button" variant="outline" onClick={() => setActiveTab('monitoring')} className="border-slate-700 text-slate-300 hover:bg-slate-800 px-8">
@@ -1176,10 +1218,3 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
         </Popover>
     </div>
 );
-
-
-
-
-
-
-
