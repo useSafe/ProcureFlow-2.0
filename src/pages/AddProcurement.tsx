@@ -136,7 +136,7 @@ const AddProcurement: React.FC = () => {
     const [prDivisionId, setPrDivisionId] = useState(draft?.prDivisionId || '');
     const [prMonth, setPrMonth] = useState(draft?.prMonth || format(new Date(), 'MMM').toUpperCase());
     const [prYear, setPrYear] = useState(draft?.prYear || format(new Date(), 'yyyy'));
-    const [prSequence, setPrSequence] = useState(draft?.prSequence || '0001');
+    const [prSequence, setPrSequence] = useState(draft?.prSequence || '001');
 
     // Division Selection (End User)
     const [selectedDivisionId, setSelectedDivisionId] = useState(draft?.selectedDivisionId || '');
@@ -246,7 +246,7 @@ const AddProcurement: React.FC = () => {
         setPrDivisionId('');
         setPrMonth(format(new Date(), 'MMM').toUpperCase());
         setPrYear(format(new Date(), 'yyyy'));
-        setPrSequence('0001');
+        setPrSequence('001');
         setSelectedDivisionId('');
         setStorageMode('shelf');
         setCabinetId('');
@@ -302,7 +302,7 @@ const AddProcurement: React.FC = () => {
                     }
                 });
 
-                setPrSequence((maxSeq + 1).toString().padStart(4, '0'));
+                setPrSequence((maxSeq + 1).toString().padStart(3, '0'));
             } else {
                 // New format: YY-MMM-SEQ — no division needed
                 const yearStr = `${prYear}-`;
@@ -320,7 +320,7 @@ const AddProcurement: React.FC = () => {
                     }
                 });
 
-                setPrSequence((maxSeq + 1).toString().padStart(4, '0'));
+                setPrSequence((maxSeq + 1).toString().padStart(3, '0'));
             }
         }
     }, [prFormat, prDivisionId, prYear, divisions, procurements, prMonth]);
@@ -511,11 +511,13 @@ const AddProcurement: React.FC = () => {
 
                 // Dates - Common
                 receivedPrDate: receivedPrDate || undefined,
-                publishedDate: publishedDate,
-                rfqCanvassDate: rfqCanvassDate,
-                rfqOpeningDate: rfqOpeningDate,
-                bacResolutionDate: bacResolutionDate,
-                forwardedGsdDate: forwardedGsdDate,
+                prDeliberatedDate: prDeliberatedDate || undefined,
+                publishedDate: publishedDate || undefined,
+                rfqCanvassDate: rfqCanvassDate || undefined,
+                rfqOpeningDate: rfqOpeningDate || undefined,
+                bacResolutionDate: bacResolutionDate || undefined,
+                forwardedGsdDate: forwardedGsdDate || undefined,
+                poNtpForwardedGsdDate: poNtpForwardedGsdDate || undefined,
 
                 // Dates - Regular
                 preBidDate: preBidDate,
@@ -745,6 +747,7 @@ const AddProcurement: React.FC = () => {
                                         <Input
                                             value={prSequence}
                                             onChange={(e) => setPrSequence(e.target.value)}
+                                            maxLength={4}
                                             className="bg-[#1e293b] border-slate-700 text-white"
                                         />
                                     </div>
@@ -755,8 +758,8 @@ const AddProcurement: React.FC = () => {
                                         {prFormat === 'old'
                                             ? (prDivisionId && divisions.find(d => d.id === prDivisionId)
                                                 ? `${divisions.find(d => d.id === prDivisionId)?.abbreviation}-${prMonth}-${prYear}-${prSequence}`
-                                                : 'DIV-MON-YY-###')
-                                            : `${prYear}-${prMonth}-${prSequence}`
+                                                : 'XXX-XXX-XX-XXX')
+                                            : (prYear && prMonth && prSequence ? `${prYear}-${prMonth}-${prSequence}` : 'XXXX-XXX-XXXX')
                                         }
                                     </span>
                                 </div>
@@ -1106,7 +1109,7 @@ const AddProcurement: React.FC = () => {
                                                     }
                                                 }} isDisabled={!rfqOpeningDate} activeColor="purple" />
                                                 <MonitoringDateField label="Forwarded to GSD for P.O" value={forwardedGsdDate} setValue={(v: string) => { setForwardedGsdDate(v); if (!v) { setPoNtpForwardedGsdDate(''); } }} isDisabled={!bacResolutionDate} activeColor="purple" />
-                                                <MonitoringDateField label="Add PO/NTP forwarded to GSD" value={poNtpForwardedGsdDate} setValue={(v: string) => { setPoNtpForwardedGsdDate(v); }} isDisabled={!forwardedGsdDate} activeColor="purple" />
+                                                <MonitoringDateField label="PO/NTP Forwarded to GSD" value={poNtpForwardedGsdDate} setValue={(v: string) => { setPoNtpForwardedGsdDate(v); }} isDisabled={!forwardedGsdDate} activeColor="purple" />
                                             </div>
                                         </div>
                                     </>
@@ -1357,7 +1360,7 @@ const DatePickerField = ({ label, date, setDate }: { label: string, date: Date |
                     variant="outline"
                     className={`h-9 w-full justify-between text-left font-normal bg-[#1e293b] border-slate-700 text-white hover:bg-[#253045] ${!date && "text-muted-foreground"}`}
                 >
-                    <span>{date ? "Set" : "Pick date"}</span>
+                    <span>{date ? format(date, 'MMM d, yyyy') : "Pick date"}</span>
                     <CalendarIcon className="ml-2 h-4 w-4 text-white opacity-100" />
                 </Button>
             </PopoverTrigger>

@@ -79,6 +79,7 @@ const SVP_PHASES: Phase[] = [
     { key: 'rfqOpeningDate', label: 'RFQ Opening', shortLabel: 'RFQ Open', icon: Gavel, dateField: 'rfqOpeningDate' },
     { key: 'bacResolutionDate', label: 'BAC Resolution', shortLabel: 'BAC Res', icon: FileCheck, dateField: 'bacResolutionDate' },
     { key: 'forwardedGsdDate', label: 'Forwarded to GSD for P.O', shortLabel: 'To GSD', icon: PackageCheck, dateField: 'forwardedGsdDate' },
+    { key: 'poNtpForwardedGsdDate', label: 'PO/NTP Forwarded to GSD', shortLabel: 'PO/NTP GSD', icon: Send, dateField: 'poNtpForwardedGsdDate' },
 ];
 
 // ─── Status Color Helpers ─────────────────────────────────────────────────────
@@ -210,11 +211,13 @@ const PhasePipeline = ({ procurement }: { procurement: Procurement }) => {
                                 <span className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${completed ? 'text-slate-300' : 'text-slate-500'}`}>
                                     {phase.shortLabel}
                                 </span>
-                                {dateVal && (
-                                    <span className="text-[10px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">
-                                        {format(new Date(dateVal), 'MMM d')}
-                                    </span>
-                                )}
+                                {dateVal && (() => {
+                                    try {
+                                        const d = new Date(dateVal);
+                                        if (isNaN(d.getTime())) return <span className="text-[10px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">{dateVal}</span>;
+                                        return <span className="text-[10px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">{format(d, 'MMM d')}</span>;
+                                    } catch { return <span className="text-[10px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">{dateVal}</span>; }
+                                })()}
                             </div>
                         </div>
 

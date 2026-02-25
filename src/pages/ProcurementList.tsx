@@ -101,6 +101,47 @@ const MONTHS = [
     { value: 'AUG', label: 'Aug' },
     { value: 'SEP', label: 'Sep' },
     { value: 'OCT', label: 'Oct' },
+    { value: 'NOV', label: 'Nov' },
+    { value: 'DEC', label: 'Dec' },
+];
+
+const checklistItems = CHECKLIST_ITEMS;
+
+const MonitoringDateField = ({ label, value, onChange, disabled, activeColor = 'blue' }: { label: string; value: string | undefined; onChange: (date: string | undefined) => void; disabled: boolean; activeColor?: 'blue' | 'purple' | 'emerald' }) => {
+    const activeClasses = {
+        blue: { border: 'border-blue-500/30', bg: 'bg-blue-900/10', text: 'text-blue-400', checkBg: 'data-[state=checked]:bg-blue-600', checkBorder: 'data-[state=checked]:border-blue-600', ring: 'focus:ring-blue-500' },
+        purple: { border: 'border-purple-500/30', bg: 'bg-purple-900/10', text: 'text-purple-400', checkBg: 'data-[state=checked]:bg-purple-600', checkBorder: 'data-[state=checked]:border-purple-600', ring: 'focus:ring-purple-500' },
+        emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-900/10', text: 'text-emerald-400', checkBg: 'data-[state=checked]:bg-emerald-600', checkBorder: 'data-[state=checked]:border-emerald-600', ring: 'focus:ring-emerald-500' }
+    }[activeColor] as any;
+
+    return (
+        <div className={`space-y-2 p-3 rounded-lg border transition-all ${disabled ? 'border-slate-800 bg-slate-900/30 opacity-50' : value ? `${activeClasses.border} ${activeClasses.bg}` : 'border-slate-700 bg-[#1e293b]/50'}`}>
+            <div className="flex items-center gap-2">
+                <Checkbox
+                    checked={!!value}
+                    onCheckedChange={(c) => onChange(c ? (value || format(new Date(), 'MM/dd/yyyy')) : undefined)}
+                    disabled={disabled}
+                    className={`h-4 w-4 border-slate-500 ${activeClasses.checkBg} ${activeClasses.checkBorder} disabled:opacity-50`}
+                />
+                <span className={`text-sm font-medium ${value ? activeClasses.text : disabled ? 'text-slate-600' : 'text-slate-300'}`}>{label}</span>
+            </div>
+            <div className="pl-6">
+                <input
+                    type="text"
+                    value={value || ''}
+                    placeholder="Progress/Date..."
+                    onChange={(e) => onChange(e.target.value || undefined)}
+                    disabled={disabled}
+                    className={`h-8 px-2 rounded-md bg-[#0f172a] border border-slate-700 text-slate-300 text-xs w-full outline-none ${activeClasses.ring} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+                />
+            </div>
+        </div>
+    );
+};
+
+interface ProcurementListProps {
+    forcedType?: string;
+    pageTitle?: string;
 }
 
 const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle }) => {
@@ -245,6 +286,7 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
     const [editPrMonth, setEditPrMonth] = useState('');
     const [editPrYear, setEditPrYear] = useState('');
     const [editPrSequence, setEditPrSequence] = useState('');
+    const [editPrFormat, setEditPrFormat] = useState<'old' | 'new'>('old');
 
     useEffect(() => {
         const unsub = onDivisionsChange(setDivisions);
@@ -669,19 +711,27 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
         setEditingProcurement(procurement);
         setIsEditDialogOpen(true);
 
-        // Parse PR Number for Edit Modal (Format: DIV-MMM-YY-SEQ)
+        // Parse PR Number for Edit Modal
         const parts = procurement.prNumber.split('-');
-        if (parts.length >= 4) {
+        // Detect format: Old = DIV-MMM-YY-SEQ (parts[0] is alpha abbrev), New = YYYY-MMM-SEQ
+        const isNewFormat = parts.length === 3 || /^\d{4}$/.test(parts[0]);
+        if (isNewFormat && parts.length >= 3) {
+            setEditPrFormat('new');
+            setEditPrYear(parts[0]);
+            setEditPrMonth(parts[1]);
+            setEditPrSequence(parts.slice(2).join('-'));
+            setEditDivisionId('');
+        } else if (!isNewFormat && parts.length >= 4) {
+            setEditPrFormat('old');
             const divAbbr = parts[0];
             const div = divisions.find(d => d.abbreviation === divAbbr);
             if (div) setEditDivisionId(div.id);
-            else setEditDivisionId(''); // Or handle unknown division
-
+            else setEditDivisionId('');
             setEditPrMonth(parts[1]);
             setEditPrYear(parts[2]);
             setEditPrSequence(parts[3]);
         } else {
-            // Reset if format doesn't match
+            setEditPrFormat('old');
             setEditDivisionId('');
             setEditPrMonth('');
             setEditPrYear('');
@@ -704,10 +754,16 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
 
         // Reconstruct PR Number from split fields
         let finalPrNumber = editingProcurement.prNumber;
-        if (editDivisionId && editPrMonth && editPrYear && editPrSequence) {
-            const div = divisions.find(d => d.id === editDivisionId);
-            if (div) {
-                finalPrNumber = `${div.abbreviation}-${editPrMonth}-${editPrYear}-${editPrSequence}`;
+        if (editPrFormat === 'new') {
+            if (editPrYear && editPrMonth && editPrSequence) {
+                finalPrNumber = `${editPrYear}-${editPrMonth}-${editPrSequence}`;
+            }
+        } else {
+            if (editDivisionId && editPrMonth && editPrYear && editPrSequence) {
+                const div = divisions.find(d => d.id === editDivisionId);
+                if (div) {
+                    finalPrNumber = `${div.abbreviation}-${editPrMonth}-${editPrYear}-${editPrSequence}`;
+                }
             }
         }
 
@@ -721,11 +777,27 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
             bidAmount: editingProcurement.bidAmount ? parseFloat(removeCommas(String(editingProcurement.bidAmount))) : undefined,
         };
 
+        // CRITICAL: Convert undefined monitoring fields to null so Firebase RTDB actually clears them.
+        // JSON.parse(JSON.stringify()) strips undefined values, leaving old DB values untouched.
+        // Setting to null explicitly tells Firebase to delete the field.
+        const monitoringFields: (keyof Procurement)[] = [
+            'receivedPrDate', 'prDeliberatedDate', 'publishedDate',
+            'rfqCanvassDate', 'rfqOpeningDate', 'bacResolutionDate',
+            'forwardedGsdDate', 'poNtpForwardedGsdDate',
+            'preBidDate', 'bidOpeningDate', 'bidEvaluationDate',
+            'postQualDate', 'postQualReportDate', 'forwardedOapiDate',
+            'noaDate', 'contractDate', 'ntpDate', 'awardedToDate',
+        ];
+        const savePayload: any = { ...updatedProcurement };
+        monitoringFields.forEach(field => {
+            if (savePayload[field] === undefined) savePayload[field] = null;
+        });
+
 
         try {
             await updateProcurement(
                 updatedProcurement.id,
-                updatedProcurement,
+                savePayload,
                 user?.email,
                 user?.name
             );
@@ -845,15 +917,30 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
 
     // Helper to get Latest Activity Date
     const getLatestActionDate = (p: Procurement) => {
-        const dates = [
+        const dateStrings = [
             p.receivedPrDate, p.prDeliberatedDate, p.publishedDate, p.preBidDate, p.bidOpeningDate,
             p.bidEvaluationDate, p.bacResolutionDate, p.postQualDate, p.postQualReportDate,
             p.forwardedOapiDate, p.noaDate, p.contractDate, p.ntpDate, p.forwardedGsdDate,
-            p.rfqCanvassDate, p.rfqOpeningDate, p.dateAdded, p.createdAt
-        ].filter(d => d).map(d => new Date(d!));
+            p.poNtpForwardedGsdDate, p.rfqCanvassDate, p.rfqOpeningDate, p.dateAdded, p.createdAt
+        ];
 
-        if (dates.length === 0) return null;
-        return new Date(Math.max.apply(null, dates.map(d => d.getTime())));
+        let maxTime = -Infinity;
+        let hasValidDate = false;
+
+        for (const ds of dateStrings) {
+            if (!ds) continue;
+            const d = new Date(ds);
+            if (!isNaN(d.getTime())) {
+                const t = d.getTime();
+                if (t > maxTime) {
+                    maxTime = t;
+                    hasValidDate = true;
+                }
+            }
+        }
+
+        if (!hasValidDate) return null;
+        return new Date(maxTime);
     };
 
     // Updated to show: Shelf-Cabinet-Folder (Legacy) OR Box-Folder (New)
@@ -894,6 +981,15 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
             processStatus: 'all'
         });
         setIsExportModalOpen(true);
+    };
+
+    const safeFormatDate = (val?: string, fmt = 'MMM d, yyyy'): string => {
+        if (!val) return '';
+        try {
+            const d = new Date(val);
+            if (isNaN(d.getTime())) return val; // return raw string if not parseable
+            return format(d, fmt);
+        } catch { return val; }
     };
 
     const handleExportConfirm = () => {
@@ -948,45 +1044,46 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                     'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
                     'Borrowed by': p.borrowedBy || '',
                     'Borrower Division': p.borrowerDivision || '',
-                    'Borrowed Date': p.borrowedDate ? format(new Date(p.borrowedDate), 'MMM d, yyyy') : '',
+                    'Borrowed Date': safeFormatDate(p.borrowedDate),
                     'Return by': p.returnedBy || '',
-                    'Return Date': p.returnDate ? format(new Date(p.returnDate), 'MMM d, yyyy') : '',
-                    'Date of Current Status': p.dateStatusUpdated ? format(new Date(p.dateStatusUpdated), 'MMM d, yyyy') : '',
+                    'Return Date': safeFormatDate(p.returnDate),
+                    'Date of Current Status': safeFormatDate(p.dateStatusUpdated),
                     'Remarks': p.description || '',
-                    'Received PR to Action(Date)': p.receivedPrDate ? format(new Date(p.receivedPrDate), 'MMM d, yyyy') : '',
-                    'PR Deliberated(Date)': p.prDeliberatedDate ? format(new Date(p.prDeliberatedDate), 'MMM d, yyyy') : '',
-                    'Published(Date)': p.publishedDate ? format(new Date(p.publishedDate), 'MMM d, yyyy') : '',
-                    'RFQ to Canvass(Date)': p.rfqCanvassDate ? format(new Date(p.rfqCanvassDate), 'MMM d, yyyy') : '',
-                    'RFQ Opening(Date)': p.rfqOpeningDate ? format(new Date(p.rfqOpeningDate), 'MMM d, yyyy') : '',
-                    'BAC Resolution(Date)': p.bacResolutionDate ? format(new Date(p.bacResolutionDate), 'MMM d, yyyy') : '',
-                    'Forwarded to GSD for P.O(Date)': p.forwardedGsdDate ? format(new Date(p.forwardedGsdDate), 'MMM d, yyyy') : '',
+                    'Received PR to Action(Date)': safeFormatDate(p.receivedPrDate),
+                    'PR Deliberated(Date)': safeFormatDate(p.prDeliberatedDate),
+                    'Published(Date)': safeFormatDate(p.publishedDate),
+                    'RFQ to Canvass(Date)': safeFormatDate(p.rfqCanvassDate),
+                    'RFQ Opening(Date)': safeFormatDate(p.rfqOpeningDate),
+                    'BAC Resolution(Date)': safeFormatDate(p.bacResolutionDate),
+                    'Forwarded to GSD for P.O(Date)': safeFormatDate(p.forwardedGsdDate),
+                    'PO/NTP Forwarded to GSD(Date)': safeFormatDate(p.poNtpForwardedGsdDate),
                     'Staff in Charge': p.createdByName || '',
                     'Supplier': p.supplier || '',
                     'Bid Amount': p.bidAmount ? `₱${p.bidAmount.toLocaleString()}` : '',
                     'Notes': p.notes || '',
-                    'A.': checklist.noticeToProceed ? 'Yes' : '',
-                    'B.': checklist.contractOfAgreement ? 'Yes' : '',
-                    'C.': checklist.noticeOfAward ? 'Yes' : '',
-                    'D.': checklist.bacResolutionAward ? 'Yes' : '',
-                    'E.': checklist.postQualReport ? 'Yes' : '',
-                    'F.': checklist.noticePostQual ? 'Yes' : '',
-                    'G.': checklist.bacResolutionPostQual ? 'Yes' : '',
-                    'H.': checklist.abstractBidsEvaluated ? 'Yes' : '',
-                    'I.': checklist.twgBidEvalReport ? 'Yes' : '',
+                    'A.': checklist.purchaseRequest ? 'Yes' : '',
+                    'B.': checklist.certificateOfFunds ? 'Yes' : '',
+                    'C.': checklist.publicationInvitation ? 'Yes' : '',
+                    'D.': checklist.minutesPreBid ? 'Yes' : '',
+                    'E.': checklist.biddingDocuments ? 'Yes' : '',
+                    'F.': checklist.supplementalBidBulletin ? 'Yes' : '',
+                    'G.': checklist.inviteObservers ? 'Yes' : '',
+                    'H.': checklist.biddersTechFinancialProposals ? 'Yes' : '',
+                    'I.': checklist.abstractBidsOpening ? 'Yes' : '',
                     'J.': checklist.minutesBidOpening ? 'Yes' : '',
-                    'K.': checklist.resultEligibilityCheck ? 'Yes' : '',
-                    'L.': checklist.biddersTechFinancialProposals ? 'Yes' : '',
-                    'M.': checklist.minutesPreBid ? 'Yes' : '',
-                    'N.': checklist.biddingDocuments ? 'Yes' : '',
-                    'O.1.': checklist.inviteObservers ? 'Yes' : '',
+                    'K.': checklist.postingCertification ? 'Yes' : '',
+                    'L.': checklist.twgBidEvalReport ? 'Yes' : '',
+                    'M.': checklist.abstractBidsEvaluated ? 'Yes' : '',
+                    'N.': checklist.bacResolutionPostQual ? 'Yes' : '',
+                    'O.': checklist.noticePostQual ? 'Yes' : '',
                     'O.2.': checklist.officialReceipt ? 'Yes' : '',
-                    'O.3.': checklist.boardResolution ? 'Yes' : '',
                     'O.4.': checklist.philgepsAwardNotice ? 'Yes' : '',
-                    'P.1.': checklist.philgepsPosting ? 'Yes' : '',
-                    'P.2.': checklist.websitePosting ? 'Yes' : '',
-                    'P.3.': checklist.postingCertificate ? 'Yes' : '',
-                    'Q.': checklist.fundsAvailability ? 'Yes' : '',
-                    'Date Added': format(new Date(p.dateAdded), 'MMM d, yyyy'),
+                    'P.': checklist.endorsementWithBacRes ? 'Yes' : '',
+                    'Q.': checklist.endorsementForSignature ? 'Yes' : '',
+                    'R.': checklist.noticeOfAward ? 'Yes' : '',
+                    'S.': checklist.contractAgreement ? 'Yes' : '',
+                    'T.': checklist.noticeToProceed ? 'Yes' : '',
+                    'Date Added': safeFormatDate(p.dateAdded),
                 };
             }
             if (exportFormat === 'regular') {
@@ -998,51 +1095,51 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                     'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
                     'Borrowed by': p.borrowedBy || '',
                     'Borrower Division': p.borrowerDivision || '',
-                    'Borrowed Date': p.borrowedDate ? format(new Date(p.borrowedDate), 'MMM d, yyyy') : '',
+                    'Borrowed Date': safeFormatDate(p.borrowedDate),
                     'Return by': p.returnedBy || '',
-                    'Return Date': p.returnDate ? format(new Date(p.returnDate), 'MMM d, yyyy') : '',
-                    'Date of Current Status': p.dateStatusUpdated ? format(new Date(p.dateStatusUpdated), 'MMM d, yyyy') : '',
+                    'Return Date': safeFormatDate(p.returnDate),
+                    'Date of Current Status': safeFormatDate(p.dateStatusUpdated),
                     'Remarks': p.description || '',
-                    'Received PR to Action(Date)': p.receivedPrDate ? format(new Date(p.receivedPrDate), 'MMM d, yyyy') : '',
-                    'PR Deliberated(Date)': p.prDeliberatedDate ? format(new Date(p.prDeliberatedDate), 'MMM d, yyyy') : '',
-                    'Published(Date)': p.publishedDate ? format(new Date(p.publishedDate), 'MMM d, yyyy') : '',
-                    'Pre-Bid(Date)': p.preBidDate ? format(new Date(p.preBidDate), 'MMM d, yyyy') : '',
-                    'Bid Opening(Date)': p.bidOpeningDate ? format(new Date(p.bidOpeningDate), 'MMM d, yyyy') : '',
-                    'Bid Evaluation Report(Date)': p.bidEvaluationDate ? format(new Date(p.bidEvaluationDate), 'MMM d, yyyy') : '',
-                    'Post Qualification(Date)': p.postQualDate ? format(new Date(p.postQualDate), 'MMM d, yyyy') : '',
-                    'Post Qualification Report(Date)': p.postQualReportDate ? format(new Date(p.postQualReportDate), 'MMM d, yyyy') : '',
-                    'Forwarded to OAPIA(Date)': p.forwardedOapiDate ? format(new Date(p.forwardedOapiDate), 'MMM d, yyyy') : '',
-                    'Notice of Award(Date)': p.noaDate ? format(new Date(p.noaDate), 'MMM d, yyyy') : '',
-                    'Contract Date(Date)': p.contractDate ? format(new Date(p.contractDate), 'MMM d, yyyy') : '',
-                    'Notice to Proceed(Date)': p.ntpDate ? format(new Date(p.ntpDate), 'MMM d, yyyy') : '',
-                    'Awarded to Supplier(Date)': p.awardedToDate ? format(new Date(p.awardedToDate), 'MMM d, yyyy') : '',
+                    'Received PR to Action(Date)': safeFormatDate(p.receivedPrDate),
+                    'PR Deliberated(Date)': safeFormatDate(p.prDeliberatedDate),
+                    'Published(Date)': safeFormatDate(p.publishedDate),
+                    'Pre-Bid(Date)': safeFormatDate(p.preBidDate),
+                    'Bid Opening(Date)': safeFormatDate(p.bidOpeningDate),
+                    'Bid Evaluation Report(Date)': safeFormatDate(p.bidEvaluationDate),
+                    'Post Qualification(Date)': safeFormatDate(p.postQualDate),
+                    'Post Qualification Report(Date)': safeFormatDate(p.postQualReportDate),
+                    'Forwarded to OAPIA(Date)': safeFormatDate(p.forwardedOapiDate),
+                    'Notice of Award(Date)': safeFormatDate(p.noaDate),
+                    'Contract Date(Date)': safeFormatDate(p.contractDate),
+                    'Notice to Proceed(Date)': safeFormatDate(p.ntpDate),
+                    'Awarded to Supplier(Date)': safeFormatDate(p.awardedToDate),
                     'Staff in Charge': p.createdByName || '',
                     'Supplier': p.supplier || '',
                     'Bid Amount': p.bidAmount ? `₱${p.bidAmount.toLocaleString()}` : '',
                     'Notes': p.notes || '',
-                    'A.': checklist.noticeToProceed ? 'Yes' : '',
-                    'B.': checklist.contractOfAgreement ? 'Yes' : '',
-                    'C.': checklist.noticeOfAward ? 'Yes' : '',
-                    'D.': checklist.bacResolutionAward ? 'Yes' : '',
-                    'E.': checklist.postQualReport ? 'Yes' : '',
-                    'F.': checklist.noticePostQual ? 'Yes' : '',
-                    'G.': checklist.bacResolutionPostQual ? 'Yes' : '',
-                    'H.': checklist.abstractBidsEvaluated ? 'Yes' : '',
-                    'I.': checklist.twgBidEvalReport ? 'Yes' : '',
+                    'A.': checklist.purchaseRequest ? 'Yes' : '',
+                    'B.': checklist.certificateOfFunds ? 'Yes' : '',
+                    'C.': checklist.publicationInvitation ? 'Yes' : '',
+                    'D.': checklist.minutesPreBid ? 'Yes' : '',
+                    'E.': checklist.biddingDocuments ? 'Yes' : '',
+                    'F.': checklist.supplementalBidBulletin ? 'Yes' : '',
+                    'G.': checklist.inviteObservers ? 'Yes' : '',
+                    'H.': checklist.biddersTechFinancialProposals ? 'Yes' : '',
+                    'I.': checklist.abstractBidsOpening ? 'Yes' : '',
                     'J.': checklist.minutesBidOpening ? 'Yes' : '',
-                    'K.': checklist.resultEligibilityCheck ? 'Yes' : '',
-                    'L.': checklist.biddersTechFinancialProposals ? 'Yes' : '',
-                    'M.': checklist.minutesPreBid ? 'Yes' : '',
-                    'N.': checklist.biddingDocuments ? 'Yes' : '',
-                    'O.1.': checklist.inviteObservers ? 'Yes' : '',
+                    'K.': checklist.postingCertification ? 'Yes' : '',
+                    'L.': checklist.twgBidEvalReport ? 'Yes' : '',
+                    'M.': checklist.abstractBidsEvaluated ? 'Yes' : '',
+                    'N.': checklist.bacResolutionPostQual ? 'Yes' : '',
+                    'O.': checklist.noticePostQual ? 'Yes' : '',
                     'O.2.': checklist.officialReceipt ? 'Yes' : '',
-                    'O.3.': checklist.boardResolution ? 'Yes' : '',
                     'O.4.': checklist.philgepsAwardNotice ? 'Yes' : '',
-                    'P.1.': checklist.philgepsPosting ? 'Yes' : '',
-                    'P.2.': checklist.websitePosting ? 'Yes' : '',
-                    'P.3.': checklist.postingCertificate ? 'Yes' : '',
-                    'Q.': checklist.fundsAvailability ? 'Yes' : '',
-                    'Date Added': format(new Date(p.dateAdded), 'MMM d, yyyy'),
+                    'P.': checklist.endorsementWithBacRes ? 'Yes' : '',
+                    'Q.': checklist.endorsementForSignature ? 'Yes' : '',
+                    'R.': checklist.noticeOfAward ? 'Yes' : '',
+                    'S.': checklist.contractAgreement ? 'Yes' : '',
+                    'T.': checklist.noticeToProceed ? 'Yes' : '',
+                    'Date Added': safeFormatDate(p.dateAdded),
                 };
             }
 
@@ -1058,39 +1155,39 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                 'Stack Number': p.stackNumber || '',
                 'Borrowed By': p.borrowedBy || '',
                 'Borrower Division': p.borrowerDivision || '',
-                'Borrowed Date': p.borrowedDate ? format(new Date(p.borrowedDate), 'MMM d, yyyy') : '',
+                'Borrowed Date': safeFormatDate(p.borrowedDate),
                 'Return By': p.returnedBy || '',
-                'Return Date': p.returnDate ? format(new Date(p.returnDate), 'MMM d, yyyy') : '',
-                'Procurement Date': p.procurementDate ? format(new Date(p.procurementDate), 'MMM d, yyyy') : '',
+                'Return Date': safeFormatDate(p.returnDate),
+                'Procurement Date': safeFormatDate(p.procurementDate),
                 'Tags': (p.tags || []).join(', '),
                 'Created By': p.createdByName || '',
-                'Created At': p.createdAt ? format(new Date(p.createdAt), 'MMM d, yyyy') : '',
+                'Created At': safeFormatDate(p.createdAt),
 
-                // Documents Handed Over (Checklist A-Q)
-                'A': checklist.noticeToProceed ? 'Yes' : '',
-                'B': checklist.contractOfAgreement ? 'Yes' : '',
-                'C': checklist.noticeOfAward ? 'Yes' : '',
-                'D': checklist.bacResolutionAward ? 'Yes' : '',
-                'E': checklist.postQualReport ? 'Yes' : '',
-                'F': checklist.noticePostQual ? 'Yes' : '',
-                'G': checklist.bacResolutionPostQual ? 'Yes' : '',
-                'H': checklist.abstractBidsEvaluated ? 'Yes' : '',
-                'I': checklist.twgBidEvalReport ? 'Yes' : '',
+                // Documents Handed Over (Checklist A-T)
+                'A': checklist.purchaseRequest ? 'Yes' : '',
+                'B': checklist.certificateOfFunds ? 'Yes' : '',
+                'C': checklist.publicationInvitation ? 'Yes' : '',
+                'D': checklist.minutesPreBid ? 'Yes' : '',
+                'E': checklist.biddingDocuments ? 'Yes' : '',
+                'F': checklist.supplementalBidBulletin ? 'Yes' : '',
+                'G': checklist.inviteObservers ? 'Yes' : '',
+                'H': checklist.biddersTechFinancialProposals ? 'Yes' : '',
+                'I': checklist.abstractBidsOpening ? 'Yes' : '',
                 'J': checklist.minutesBidOpening ? 'Yes' : '',
-                'K': checklist.resultEligibilityCheck ? 'Yes' : '',
-                'L': checklist.biddersTechFinancialProposals ? 'Yes' : '',
-                'M': checklist.minutesPreBid ? 'Yes' : '',
-                'N': checklist.biddingDocuments ? 'Yes' : '',
-                'O.1': checklist.inviteObservers ? 'Yes' : '',
+                'K': checklist.postingCertification ? 'Yes' : '',
+                'L': checklist.twgBidEvalReport ? 'Yes' : '',
+                'M': checklist.abstractBidsEvaluated ? 'Yes' : '',
+                'N': checklist.bacResolutionPostQual ? 'Yes' : '',
+                'O': checklist.noticePostQual ? 'Yes' : '',
                 'O.2': checklist.officialReceipt ? 'Yes' : '',
-                'O.3': checklist.boardResolution ? 'Yes' : '',
                 'O.4': checklist.philgepsAwardNotice ? 'Yes' : '',
-                'P.1': checklist.philgepsPosting ? 'Yes' : '',
-                'P.2': checklist.websitePosting ? 'Yes' : '',
-                'P.3': checklist.postingCertificate ? 'Yes' : '',
-                'Q': checklist.fundsAvailability ? 'Yes' : '',
+                'P': checklist.endorsementWithBacRes ? 'Yes' : '',
+                'Q': checklist.endorsementForSignature ? 'Yes' : '',
+                'R': checklist.noticeOfAward ? 'Yes' : '',
+                'S': checklist.contractAgreement ? 'Yes' : '',
+                'T': checklist.noticeToProceed ? 'Yes' : '',
 
-                'Date Added': format(new Date(p.dateAdded), 'MMM d, yyyy'),
+                'Date Added': safeFormatDate(p.dateAdded),
             };
         });
 
@@ -1603,33 +1700,6 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                         // User logic: "Completed(Green), In Progress(Yellow), Returned PR to EU(Purple), Not yet Acted(Gray), Failure(Red), Cancelled(Red Orange)"
                                         let effectiveStatus = pStatus || 'Not yet Acted';
 
-                                        // Auto-detect 'In Progress' if marked 'Not yet Acted' but has updates
-                                        if (effectiveStatus === 'Not yet Acted') {
-                                            // Check if any progress monitoring dates are set
-                                            const hasProgress = [
-                                                procurement.receivedPrDate,
-                                                procurement.prDeliberatedDate,
-                                                procurement.publishedDate,
-                                                procurement.preBidDate,
-                                                procurement.bidOpeningDate,
-                                                procurement.bidEvaluationDate,
-                                                procurement.bacResolutionDate,
-                                                procurement.postQualDate,
-                                                procurement.postQualReportDate,
-                                                procurement.forwardedOapiDate,
-                                                procurement.noaDate,
-                                                procurement.contractDate,
-                                                procurement.ntpDate,
-                                                procurement.rfqCanvassDate,
-                                                procurement.rfqOpeningDate,
-                                                procurement.forwardedGsdDate
-                                            ].some(d => !!d);
-
-                                            if (hasProgress) {
-                                                effectiveStatus = 'In Progress';
-                                            }
-                                        }
-
                                         // If status is Pending (legacy), treat as In Progress
                                         if (pStatus === 'Pending') effectiveStatus = 'In Progress';
 
@@ -1965,21 +2035,41 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                     <div className="space-y-2 col-span-2">
                                         {!['Attendance Sheets', 'Others'].includes(editingProcurement.procurementType || '') && (
                                             <>
-                                                <Label className="text-slate-300">PR Number Construction</Label>
-                                                <div className="grid grid-cols-4 gap-2 items-end p-3 rounded-lg bg-[#1e293b]/50 border border-slate-700/50">
-                                                    <div className="space-y-1">
-                                                        <Label className="text-xs text-slate-400">Division</Label>
-                                                        <Select value={editDivisionId} onValueChange={setEditDivisionId}>
-                                                            <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs">
-                                                                <SelectValue placeholder="Div" />
-                                                            </SelectTrigger>
-                                                            <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
-                                                                {divisions.map(div => (
-                                                                    <SelectItem key={div.id} value={div.id}>{div.abbreviation}</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <Label className="text-slate-300">PR Number Construction</Label>
+                                                    <div className="flex bg-[#1e293b] p-1 rounded-lg border border-slate-700 text-xs">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditPrFormat('old')}
+                                                            className={`px-3 py-1 rounded-md font-medium transition-all ${editPrFormat === 'old' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                                                        >
+                                                            Old (Div-Mon-Yr-#)
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditPrFormat('new')}
+                                                            className={`px-3 py-1 rounded-md font-medium transition-all ${editPrFormat === 'new' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                                                        >
+                                                            New (Yr-Mon-#)
+                                                        </button>
                                                     </div>
+                                                </div>
+                                                <div className={`grid gap-2 items-end p-3 rounded-lg bg-[#1e293b]/50 border border-slate-700/50 ${editPrFormat === 'old' ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                                                    {editPrFormat === 'old' && (
+                                                        <div className="space-y-1">
+                                                            <Label className="text-xs text-slate-400">Division</Label>
+                                                            <Select value={editDivisionId} onValueChange={setEditDivisionId}>
+                                                                <SelectTrigger className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs">
+                                                                    <SelectValue placeholder="Div" />
+                                                                </SelectTrigger>
+                                                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white max-h-[200px]">
+                                                                    {divisions.map(div => (
+                                                                        <SelectItem key={div.id} value={div.id}>{div.abbreviation}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    )}
                                                     <div className="space-y-1">
                                                         <Label className="text-xs text-slate-400">Month</Label>
                                                         <Select value={editPrMonth} onValueChange={setEditPrMonth}>
@@ -1999,7 +2089,7 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                                             value={editPrYear}
                                                             onChange={(e) => setEditPrYear(e.target.value)}
                                                             className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
-                                                            maxLength={2}
+                                                            maxLength={4}
                                                         />
                                                     </div>
                                                     <div className="space-y-1">
@@ -2008,12 +2098,20 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                                             value={editPrSequence}
                                                             onChange={(e) => setEditPrSequence(e.target.value)}
                                                             className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
-                                                            maxLength={3}
+                                                            maxLength={4}
                                                         />
                                                     </div>
                                                 </div>
-                                                <div className="mt-1 text-xs text-slate-500 text-right">
-                                                    Current: <span className="font-mono text-emerald-500">{editingProcurement.prNumber}</span>
+                                                <div className="mt-1 text-xs text-slate-500 flex justify-between">
+                                                    <span>Preview: <span className="font-mono text-emerald-400 font-bold">
+                                                        {editPrFormat === 'old'
+                                                            ? (editDivisionId && divisions.find(d => d.id === editDivisionId)
+                                                                ? `${divisions.find(d => d.id === editDivisionId)?.abbreviation}-${editPrMonth}-${editPrYear}-${editPrSequence}`
+                                                                : 'XXX-XXX-XX-XXX')
+                                                            : (editPrYear && editPrMonth && editPrSequence ? `${editPrYear}-${editPrMonth}-${editPrSequence}` : 'XXXX-XXX-XXXX')
+                                                        }
+                                                    </span></span>
+                                                    <span>Current: <span className="font-mono text-emerald-500">{editingProcurement.prNumber}</span></span>
                                                 </div>
                                             </>
                                         )}
@@ -2187,9 +2285,9 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                     {/* Pre-Procurement */}
                                     <div className="space-y-2">
                                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                            <MonitoringDateField label="Received PR to Action" value={editingProcurement.receivedPrDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, receivedPrDate: d, ...(!d ? { prDeliberatedDate: undefined, publishedDate: undefined, preBidDate: undefined, bidOpeningDate: undefined, bidEvaluationDate: undefined, bacResolutionDate: undefined, postQualDate: undefined, postQualReportDate: undefined, forwardedOapiDate: undefined, noaDate: undefined, contractDate: undefined, ntpDate: undefined, awardedToDate: undefined, rfqCanvassDate: undefined, rfqOpeningDate: undefined, forwardedGsdDate: undefined } : {}) })} disabled={false} activeColor="blue" />
-                                            <MonitoringDateField label="PR Deliberated" value={editingProcurement.prDeliberatedDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, prDeliberatedDate: d, ...(!d ? { publishedDate: undefined, preBidDate: undefined, bidOpeningDate: undefined, bidEvaluationDate: undefined, bacResolutionDate: undefined, postQualDate: undefined, postQualReportDate: undefined, forwardedOapiDate: undefined, noaDate: undefined, contractDate: undefined, ntpDate: undefined, awardedToDate: undefined, rfqCanvassDate: undefined, rfqOpeningDate: undefined, forwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.receivedPrDate} activeColor="blue" />
-                                            <MonitoringDateField label="Published" value={editingProcurement.publishedDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, publishedDate: d, ...(!d ? { preBidDate: undefined, bidOpeningDate: undefined, bidEvaluationDate: undefined, bacResolutionDate: undefined, postQualDate: undefined, postQualReportDate: undefined, forwardedOapiDate: undefined, noaDate: undefined, contractDate: undefined, ntpDate: undefined, awardedToDate: undefined, rfqCanvassDate: undefined, rfqOpeningDate: undefined, forwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.prDeliberatedDate} activeColor="blue" />
+                                            <MonitoringDateField label="Received PR to Action" value={editingProcurement.receivedPrDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, receivedPrDate: d, ...(!d ? { prDeliberatedDate: undefined, publishedDate: undefined, preBidDate: undefined, bidOpeningDate: undefined, bidEvaluationDate: undefined, bacResolutionDate: undefined, postQualDate: undefined, postQualReportDate: undefined, forwardedOapiDate: undefined, noaDate: undefined, contractDate: undefined, ntpDate: undefined, awardedToDate: undefined, rfqCanvassDate: undefined, rfqOpeningDate: undefined, forwardedGsdDate: undefined, poNtpForwardedGsdDate: undefined } : {}) })} disabled={false} activeColor="blue" />
+                                            <MonitoringDateField label="PR Deliberated" value={editingProcurement.prDeliberatedDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, prDeliberatedDate: d, ...(!d ? { publishedDate: undefined, preBidDate: undefined, bidOpeningDate: undefined, bidEvaluationDate: undefined, bacResolutionDate: undefined, postQualDate: undefined, postQualReportDate: undefined, forwardedOapiDate: undefined, noaDate: undefined, contractDate: undefined, ntpDate: undefined, awardedToDate: undefined, rfqCanvassDate: undefined, rfqOpeningDate: undefined, forwardedGsdDate: undefined, poNtpForwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.receivedPrDate} activeColor="blue" />
+                                            <MonitoringDateField label="Published" value={editingProcurement.publishedDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, publishedDate: d, ...(!d ? { preBidDate: undefined, bidOpeningDate: undefined, bidEvaluationDate: undefined, bacResolutionDate: undefined, postQualDate: undefined, postQualReportDate: undefined, forwardedOapiDate: undefined, noaDate: undefined, contractDate: undefined, ntpDate: undefined, awardedToDate: undefined, rfqCanvassDate: undefined, rfqOpeningDate: undefined, forwardedGsdDate: undefined, poNtpForwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.prDeliberatedDate} activeColor="blue" />
                                         </div>
                                     </div>
 
@@ -2204,10 +2302,11 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                                 </>
                                             ) : (
                                                 <>
-                                                    <MonitoringDateField label="RFQ to Canvass" value={editingProcurement.rfqCanvassDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, rfqCanvassDate: d, ...(!d ? { rfqOpeningDate: undefined, bacResolutionDate: undefined, forwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.publishedDate} activeColor="purple" />
-                                                    <MonitoringDateField label="RFQ Opening" value={editingProcurement.rfqOpeningDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, rfqOpeningDate: d, ...(!d ? { bacResolutionDate: undefined, forwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.rfqCanvassDate} activeColor="purple" />
-                                                    <MonitoringDateField label="BAC Resolution" value={editingProcurement.bacResolutionDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, bacResolutionDate: d, ...(!d ? { forwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.rfqOpeningDate} activeColor="purple" />
-                                                    <MonitoringDateField label="Forwarded to GSD for P.O" value={editingProcurement.forwardedGsdDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, forwardedGsdDate: d })} disabled={!editingProcurement.bacResolutionDate} activeColor="purple" />
+                                                    <MonitoringDateField label="RFQ to Canvass" value={editingProcurement.rfqCanvassDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, rfqCanvassDate: d, ...(!d ? { rfqOpeningDate: undefined, bacResolutionDate: undefined, forwardedGsdDate: undefined, poNtpForwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.publishedDate} activeColor="purple" />
+                                                    <MonitoringDateField label="RFQ Opening" value={editingProcurement.rfqOpeningDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, rfqOpeningDate: d, ...(!d ? { bacResolutionDate: undefined, forwardedGsdDate: undefined, poNtpForwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.rfqCanvassDate} activeColor="purple" />
+                                                    <MonitoringDateField label="BAC Resolution" value={editingProcurement.bacResolutionDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, bacResolutionDate: d, ...(!d ? { forwardedGsdDate: undefined, poNtpForwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.rfqOpeningDate} activeColor="purple" />
+                                                    <MonitoringDateField label="Forwarded to GSD for P.O" value={editingProcurement.forwardedGsdDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, forwardedGsdDate: d, ...(!d ? { poNtpForwardedGsdDate: undefined } : {}) })} disabled={!editingProcurement.bacResolutionDate} activeColor="purple" />
+                                                    <MonitoringDateField label="PO/NTP Forwarded to GSD" value={editingProcurement.poNtpForwardedGsdDate} onChange={(d: string | undefined) => setEditingProcurement({ ...editingProcurement, poNtpForwardedGsdDate: d })} disabled={!editingProcurement.forwardedGsdDate} activeColor="purple" />
                                                 </>
                                             )}
                                         </div>
@@ -2267,25 +2366,8 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                                     </div>
                                                 </>
                                             ) : (
-                                                /* To GSD (For SVP / Others) */
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center justify-between">
-                                                        <Label className={`text-xs ${!editingProcurement.forwardedGsdDate ? 'text-slate-600' : 'text-slate-300'}`}>To GSD</Label>
-                                                        <Checkbox
-                                                            checked={!!editingProcurement.forwardedGsdDate}
-                                                            onCheckedChange={(checked) => setEditingProcurement({ ...editingProcurement, forwardedGsdDate: checked ? (editingProcurement.forwardedGsdDate || new Date().toISOString()) : undefined })}
-                                                            disabled={!editingProcurement.bacResolutionDate}
-                                                            className="h-3.5 w-3.5 border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
-                                                        />
-                                                    </div>
-                                                    <Input
-                                                        type="date"
-                                                        value={editingProcurement.forwardedGsdDate ? format(new Date(editingProcurement.forwardedGsdDate), 'yyyy-MM-dd') : ''}
-                                                        onChange={(e) => setEditingProcurement({ ...editingProcurement, forwardedGsdDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
-                                                        disabled={!editingProcurement.bacResolutionDate}
-                                                        className={`bg-[#1e293b] border-slate-700 text-white h-8 text-xs ${!editingProcurement.bacResolutionDate ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                    />
-                                                </div>
+                                                /* SVP: no extra block needed here — handled in canvass section above */
+                                                null
                                             )}
                                         </div>
                                     </div>

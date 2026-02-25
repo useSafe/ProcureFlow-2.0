@@ -121,11 +121,13 @@ const PhasePipeline = ({ procurement }: { procurement: Procurement }) => {
                                 <span className={`text-[8px] font-bold uppercase tracking-wider mb-0.5 ${completed ? 'text-slate-300' : 'text-slate-500'}`}>
                                     {phase.shortLabel}
                                 </span>
-                                {dateVal && (
-                                    <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">
-                                        {format(new Date(dateVal), 'MMM d')}
-                                    </span>
-                                )}
+                                {dateVal && (() => {
+                                    try {
+                                        const d = new Date(dateVal);
+                                        if (isNaN(d.getTime())) return <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">{dateVal}</span>;
+                                        return <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">{format(d, 'MMM d')}</span>;
+                                    } catch { return <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1 rounded">{dateVal}</span>; }
+                                })()}
                             </div>
                         </div>
 

@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Procurement } from '@/types/procurement';
 import { format } from 'date-fns';
 import { MapPin, Calendar, FileText, Activity, Layers, Tag, User, Loader2 } from 'lucide-react';
+import { CHECKLIST_ITEMS } from '@/lib/constants';
 
 interface ProcurementDetailsDialogProps {
     open: boolean;
@@ -31,6 +32,13 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return 'N/A';
+        // If it looks like an ISO timestamp, format it nicely
+        try {
+            const d = new Date(dateString);
+            if (!isNaN(d.getTime()) && dateString.includes('T')) {
+                return format(d, 'MMM d, yyyy');
+            }
+        } catch { }
         return dateString;
     };
 
@@ -159,13 +167,13 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                         {procurement.abc && (
                                             <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-700">
                                                 <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-1">ABC (Approved Budget)</label>
-                                                <p className="text-lg font-bold text-emerald-400 font-mono">₱{parseFloat(procurement.abc).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                <p className="text-lg font-bold text-emerald-400 font-mono">₱{parseFloat(String(procurement.abc)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             </div>
                                         )}
                                         {procurement.bidAmount && (
                                             <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-700">
                                                 <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-1">Bid Amount (Contract Price)</label>
-                                                <p className="text-lg font-bold text-blue-400 font-mono">₱{parseFloat(procurement.bidAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                <p className="text-lg font-bold text-blue-400 font-mono">₱{parseFloat(String(procurement.bidAmount)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             </div>
                                         )}
                                         {procurement.supplier && (
@@ -407,75 +415,26 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent>
-                                            <ScrollArea className="h-[250px] pr-4">
-                                                <div className="flex flex-col md:flex-row gap-6">
-                                                    {/* LEFT COLUMN */}
-                                                    <div className="flex-1 space-y-2">
-                                                        {[
-                                                            { key: 'noticeToProceed', label: 'A. Notice to Proceed' },
-                                                            { key: 'contractOfAgreement', label: 'B. Contract of Agreement' },
-                                                            { key: 'noticeOfAward', label: 'C. Notice of Award' },
-                                                            { key: 'bacResolutionAward', label: 'D. BAC Resolution to Award' },
-                                                            { key: 'postQualReport', label: 'E. Post-Qual Report' },
-                                                            { key: 'noticePostQual', label: 'F. Notice of Post-qualification' },
-                                                            { key: 'bacResolutionPostQual', label: 'G. BAC Resolution to Post-qualify' },
-                                                            { key: 'abstractBidsEvaluated', label: 'H. Abstract of Bids as Evaluated' },
-                                                            { key: 'twgBidEvalReport', label: 'I. TWG Bid Evaluation Report' },
-                                                            { key: 'minutesBidOpening', label: 'J. Minutes of Bid Opening' },
-                                                            { key: 'resultEligibilityCheck', label: 'K. Eligibility Check Results' },
-                                                        ].map((item) => (
-                                                            <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
-                                                                <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                    ? 'bg-blue-600 border-blue-600'
-                                                                    : 'border-slate-600'
-                                                                    }`}>
-                                                                    {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
-                                                                        <span className="text-white text-[10px]">✓</span>
-                                                                    )}
-                                                                </div>
-                                                                <span className={`text-xs leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                    ? 'text-slate-200'
-                                                                    : 'text-slate-500'
-                                                                    }`}>
-                                                                    {item.label}
-                                                                </span>
+                                            <ScrollArea className="h-[300px] pr-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                    {CHECKLIST_ITEMS.map((item) => (
+                                                        <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
+                                                            <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
+                                                                ? 'bg-blue-600 border-blue-600'
+                                                                : 'border-slate-600'
+                                                                }`}>
+                                                                {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
+                                                                    <span className="text-white text-[10px]">✓</span>
+                                                                )}
                                                             </div>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* RIGHT COLUMN */}
-                                                    <div className="flex-1 space-y-2">
-                                                        {[
-                                                            { key: 'biddersTechFinancialProposals', label: 'L. Bidders Technical and Financial Proposals' },
-                                                            { key: 'minutesPreBid', label: 'M. Minutes of Pre-Bid Conference' },
-                                                            { key: 'biddingDocuments', label: 'N. Bidding Documents' },
-                                                            { key: 'inviteObservers', label: 'O.1. Letter Invitation to Observers' },
-                                                            { key: 'officialReceipt', label: 'O.2. Official Receipt' },
-                                                            { key: 'boardResolution', label: 'O.3. Board Resolution' },
-                                                            { key: 'philgepsAwardNotice', label: 'O.4. PhilGEPS Award Notice Abstract' },
-                                                            { key: 'philgepsPosting', label: 'P.1. PhilGEPS Posting' },
-                                                            { key: 'websitePosting', label: 'P.2. Website Posting' },
-                                                            { key: 'postingCertificate', label: 'P.3. Posting Certificate' },
-                                                            { key: 'fundsAvailability', label: 'Q. CAF, PR, TOR & APP' },
-                                                        ].map((item) => (
-                                                            <div key={item.key} className="flex items-start gap-3 p-2 rounded hover:bg-slate-800/30 transition-colors">
-                                                                <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                    ? 'bg-blue-600 border-blue-600'
-                                                                    : 'border-slate-600'
-                                                                    }`}>
-                                                                    {procurement.checklist?.[item.key as keyof typeof procurement.checklist] && (
-                                                                        <span className="text-white text-[10px]">✓</span>
-                                                                    )}
-                                                                </div>
-                                                                <span className={`text-xs leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
-                                                                    ? 'text-slate-200'
-                                                                    : 'text-slate-500'
-                                                                    }`}>
-                                                                    {item.label}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                                            <span className={`text-xs leading-tight ${procurement.checklist?.[item.key as keyof typeof procurement.checklist]
+                                                                ? 'text-slate-200'
+                                                                : 'text-slate-500'
+                                                                }`}>
+                                                                {item.label}
+                                                            </span>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </ScrollArea>
                                         </CardContent>
