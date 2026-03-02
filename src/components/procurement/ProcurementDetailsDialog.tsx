@@ -121,7 +121,7 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                             {/* Summary Cards */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div className="p-3 bg-[#1e293b]/50 rounded-lg border border-slate-800">
-                                    <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Division</label>
+                                    <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">End User</label>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Layers className="h-4 w-4 text-blue-400" />
                                         <span>{procurement.division || 'N/A'}</span>
@@ -449,9 +449,9 @@ const ProcurementDetailsDialog: React.FC<ProcurementDetailsDialogProps> = ({
                                         <span className="block font-semibold mb-1">Stack Number</span>
                                         <span className="font-mono">{procurement.stackNumber ? `#${procurement.stackNumber}` : 'N/A'}</span>
                                     </div>
-                                    {procurement.status === 'active' && procurement.division && (
+                                    {procurement.division && (
                                         <div>
-                                            <span className="block font-semibold mb-1">Borrowed By Division</span>
+                                            <span className="block font-semibold mb-1">End User</span>
                                             <span className="capitalize">{procurement.division}</span>
                                         </div>
                                     )}

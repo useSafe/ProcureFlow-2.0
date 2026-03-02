@@ -643,7 +643,7 @@ const VisualAllocation: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">
-                                    <h3 className="text-xs font-medium text-slate-500 mb-1 uppercase">Division</h3>
+                                    <h3 className="text-xs font-medium text-slate-500 mb-1 uppercase">End User</h3>
                                     <p className="text-white">{selectedFile.division || 'N/A'}</p>
                                 </div>
                                 <div className="p-3 bg-slate-900 rounded-lg border border-slate-800">

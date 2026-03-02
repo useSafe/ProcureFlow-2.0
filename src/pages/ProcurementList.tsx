@@ -770,8 +770,8 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
         const updatedProcurement: Procurement = {
             ...editingProcurement,
             prNumber: finalPrNumber,
-            // Ensure division name is updated if division ID changed (optional but good practice)
-            division: divisions.find(d => d.id === editDivisionId)?.name || editingProcurement.division,
+            // NOTE: division (End User) is already set on editingProcurement via the Edit modal's
+            // End User dropdown — do NOT overwrite it with editDivisionId (which is the PR Number's division).
             // Parse financials
             abc: editingProcurement.abc ? parseFloat(removeCommas(String(editingProcurement.abc))) : undefined,
             bidAmount: editingProcurement.bidAmount ? parseFloat(removeCommas(String(editingProcurement.bidAmount))) : undefined,
