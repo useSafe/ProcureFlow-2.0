@@ -51,7 +51,7 @@ import {
 } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { deleteProcurement, updateProcurement, onProcurementsChange, onCabinetsChange, onShelvesChange, onFoldersChange, onDivisionsChange, onBoxesChange } from '@/lib/storage';
+import { deleteProcurement, updateProcurement, onProcurementsChange, onCabinetsChange, onShelvesChange, onFoldersChange, onDivisionsChange, onBoxesChange, recalculateAllFolders } from '@/lib/storage';
 import { Procurement, Cabinet, Shelf, Folder, Box, ProcurementStatus, UrgencyLevel, ProcurementFilters, Division } from '@/types/procurement';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { DateRange } from 'react-day-picker';
@@ -247,6 +247,22 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
 
     // Export Modal State
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+    // One-time automatic recalculation of stack numbers
+    useEffect(() => {
+        const runRecalc = async () => {
+            if (!localStorage.getItem('has_recalculated_stacks_v3')) {
+                try {
+                    await recalculateAllFolders();
+                    localStorage.setItem('has_recalculated_stacks_v3', 'true');
+                    toast.success('System: Successfully recalibrated all folder stack numbers.');
+                } catch (e) {
+                    console.error("Failed to batch recalculate", e);
+                }
+            }
+        };
+        runRecalc();
+    }, []);
     // Automatically determined export format based on forcedType
     const exportFormat = forcedType === 'SVP' ? 'svp' : forcedType === 'Regular Bidding' ? 'regular' : 'standard';
 
@@ -287,18 +303,50 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
     const [editPrYear, setEditPrYear] = useState('');
     const [editPrSequence, setEditPrSequence] = useState('');
     const [editPrFormat, setEditPrFormat] = useState<'old' | 'new'>('old');
+    const [isCheckingEditPr, setIsCheckingEditPr] = useState(false);
+    const [editPrExists, setEditPrExists] = useState<boolean | null>(null);
 
     useEffect(() => {
         const unsub = onDivisionsChange(setDivisions);
         return () => unsub();
     }, []);
+
+    // Live validation for Edit PR Number
+    useEffect(() => {
+        if (!editingProcurement) {
+            setEditPrExists(null);
+            return;
+        }
+
+        const isPrComplete = editPrFormat === 'old'
+            ? !!(editDivisionId && editPrMonth && editPrYear && editPrSequence)
+            : !!(editPrMonth && editPrYear && editPrSequence);
+
+        if (!isPrComplete) {
+            setEditPrExists(null);
+            return;
+        }
+
+        const currentPrPreview = editPrFormat === 'old'
+            ? `${divisions.find(d => d.id === editDivisionId)?.abbreviation}-${editPrMonth}-${editPrYear.length === 4 ? editPrYear.slice(-2) : editPrYear}-${editPrSequence}`
+            : `${editPrYear}-${editPrMonth}-${editPrSequence}`;
+
+        setIsCheckingEditPr(true);
+        const timer = setTimeout(() => {
+            const exists = procurements.some(p => p.prNumber === currentPrPreview && p.id !== editingProcurement.id);
+            setEditPrExists(exists);
+            setIsCheckingEditPr(false);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [editPrFormat, editDivisionId, editPrMonth, editPrYear, editPrSequence, divisions, procurements, editingProcurement]);
     const [viewProcurement, setViewProcurement] = useState<Procurement | null>(null);
     const [isNonProcurement, setIsNonProcurement] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     // Sorting state
     const [sortField, setSortField] = useState<'name' | 'prNumber' | 'date' | 'stackNumber'>('date');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
     // Relocate Modal State
     const [isRelocateDialogOpen, setIsRelocateDialogOpen] = useState(false);
@@ -580,12 +628,16 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
     }, [filters.cabinetId, shelves]);
 
     useEffect(() => {
-        if (filters.shelfId) {
-            setFilterAvailableFolders(folders.filter(f => f.shelfId === filters.shelfId));
+        if (filters.boxId && filters.boxId !== 'all') {
+            // Box filter selected: show folders belonging to that box
+            setFilterAvailableFolders(folders.filter(f => f.boxId === filters.boxId));
+        } else if (filters.shelfId) {
+            // Shelf (cabinet) filter selected: show direct folders (no box)
+            setFilterAvailableFolders(folders.filter(f => f.shelfId === filters.shelfId && !f.boxId));
         } else {
             setFilterAvailableFolders([]);
         }
-    }, [filters.shelfId, folders]);
+    }, [filters.shelfId, filters.boxId, folders]);
 
     // build status options based on current procurements (fall back to common ones)
     // Filter options
@@ -609,6 +661,22 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
             return [...prev, type];
         });
     };
+
+    const toggleProcurementStatusFilter = (status: string) => {
+        setProcurementStatusFilters(prev => {
+            if (prev.includes(status)) return prev.filter(s => s !== status);
+            return [...prev, status];
+        });
+    };
+
+    const PROCESS_STATUS_OPTIONS = [
+        'Completed',
+        'In Progress',
+        'Failure',
+        'Returned PR to EU',
+        'Not yet Acted',
+        'Cancelled'
+    ] as const;
 
 
 
@@ -643,9 +711,12 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
             })
         );
 
+        // Process Status filter (multi-select, empty = all)
+        const matchesProcurementStatus = procurementStatusFilters.length === 0 || procurementStatusFilters.includes(procurement.procurementStatus || 'Not yet Acted');
+
         const matchesBox = !filters.boxId || procurement.boxId === filters.boxId;
 
-        return matchesSearch && matchesCabinet && matchesShelf && matchesFolder && matchesStatus && matchesUrgency && matchesDivision && matchesType && matchesDate && matchesBox;
+        return matchesSearch && matchesCabinet && matchesShelf && matchesFolder && matchesStatus && matchesUrgency && matchesDivision && matchesType && matchesDate && matchesBox && matchesProcurementStatus;
     }).sort((a, b) => {
         let comparison = 0;
 
@@ -654,8 +725,8 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
         } else if (sortField === 'prNumber') {
             comparison = a.prNumber.localeCompare(b.prNumber);
         } else if (sortField === 'date') {
-            // Reverse comparison for date: newer dates first when ascending
-            comparison = new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime();
+            // Standard: asc = oldest first (a-b), desc = newest first (b-a)
+            comparison = new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime();
         } else if (sortField === 'stackNumber') {
             // Sort by stack number (files without stack numbers go to end)
             const aStack = a.stackNumber || 999;
@@ -697,13 +768,14 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
         });
         // clear multi-select status
         setStatusFilters([]);
+        setProcurementStatusFilters([]);
 
         setFilterDivision('all_divisions');
         setTypeFilters([]);
         setFilterDateRange(undefined);
         // reset sorting
         setSortField('date');
-        setSortDirection('asc');
+        setSortDirection('desc');
         setCurrentPage(1);
     };
 
@@ -765,6 +837,12 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                     finalPrNumber = `${div.abbreviation}-${editPrMonth}-${editPrYear}-${editPrSequence}`;
                 }
             }
+        }
+
+        // Check if the new PR number conflicts with an existing record (excluding self)
+        const duplicateExists = procurements.some(p => p.prNumber === finalPrNumber && p.id !== editingProcurement.id);
+        if (duplicateExists) {
+            toast.warning(`⚠️ PR Number "${finalPrNumber}" already exists on another record. Saving anyway...`);
         }
 
         const updatedProcurement: Procurement = {
@@ -873,6 +951,7 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                 user?.email,
                 user?.name
             );
+            await updateStackNumbersForFolder(folderId);
             toast.success('Stack number updated');
             setIsRelocateDialogOpen(false);
             setRelocateProcurement(null);
@@ -1531,6 +1610,47 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
 
 
 
+                            {/* Process Status Filter (Multi-select) */}
+                            <div className="flex-1 min-w-[140px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" className="w-full flex justify-between items-center text-white px-3 py-1 h-6 text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span>Process Status</span>
+                                                {procurementStatusFilters.length > 0 && (
+                                                    <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-blue-600 text-white text-[10px] font-medium">
+                                                        {procurementStatusFilters.length}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <ChevronDown className="h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="bg-[#1e293b] border-slate-700 text-white p-3 w-56">
+                                        <div className="mb-2 text-slate-300 text-sm">Select process status</div>
+                                        <div className="flex flex-col gap-2">
+                                            {PROCESS_STATUS_OPTIONS.map((status) => (
+                                                <div key={status} className="flex items-center gap-2">
+                                                    <Checkbox
+                                                        checked={procurementStatusFilters.includes(status)}
+                                                        onCheckedChange={() => toggleProcurementStatusFilter(status)}
+                                                        className="border-slate-500 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleProcurementStatusFilter(status)}
+                                                        className="text-sm text-slate-200 text-left w-full"
+                                                    >
+                                                        {status}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+
+
                             {/* Division Filter */}
                             <div className="flex-1 min-w-[150px] bg-[#1e293b] rounded-md border border-slate-700 p-1">
                                 <Select
@@ -1839,17 +1959,18 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end gap-2">
-                                                        {/* {isFolderView && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => handleRelocateClick(procurement)}
-                                                            className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
-                                                            title="Relocate / Reorder"
-                                                        >
-                                                            <ArrowUp className="h-4 w-4" />
-                                                        </Button>
-                                                    )} */}
+                                                        {/* Reorder Stack Number button */}
+                                                        {procurement.folderId && !['viewer', 'archiver'].includes(user?.role || '') && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => handleRelocateClick(procurement)}
+                                                                className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                                                                title="Reorder Stack Number"
+                                                            >
+                                                                <ArrowUp className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
@@ -2098,20 +2219,34 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                                                             value={editPrSequence}
                                                             onChange={(e) => setEditPrSequence(e.target.value)}
                                                             className="bg-[#1e293b] border-slate-700 text-white h-8 text-xs"
-                                                            maxLength={4}
+                                                            maxLength={7}
                                                         />
                                                     </div>
                                                 </div>
-                                                <div className="mt-1 text-xs text-slate-500 flex justify-between">
-                                                    <span>Preview: <span className="font-mono text-emerald-400 font-bold">
-                                                        {editPrFormat === 'old'
-                                                            ? (editDivisionId && divisions.find(d => d.id === editDivisionId)
-                                                                ? `${divisions.find(d => d.id === editDivisionId)?.abbreviation}-${editPrMonth}-${editPrYear}-${editPrSequence}`
-                                                                : 'XXX-XXX-XX-XXX')
-                                                            : (editPrYear && editPrMonth && editPrSequence ? `${editPrYear}-${editPrMonth}-${editPrSequence}` : 'XXXX-XXX-XXXX')
-                                                        }
-                                                    </span></span>
-                                                    <span>Current: <span className="font-mono text-emerald-500">{editingProcurement.prNumber}</span></span>
+                                                <div className="mt-1 text-xs text-slate-500 flex flex-col gap-1">
+                                                    <div className="flex justify-between items-center">
+                                                        <span>Preview: <span className="font-mono text-emerald-400 font-bold ml-1">
+                                                            {editPrFormat === 'old'
+                                                                ? (editDivisionId && divisions.find(d => d.id === editDivisionId)
+                                                                    ? `${divisions.find(d => d.id === editDivisionId)?.abbreviation}-${editPrMonth}-${editPrYear.length === 4 ? editPrYear.slice(-2) : editPrYear}-${editPrSequence}`
+                                                                    : 'XXX-XXX-XX-XXX')
+                                                                : (editPrYear && editPrMonth && editPrSequence ? `${editPrYear}-${editPrMonth}-${editPrSequence}` : 'XXXX-XXX-XXXX')
+                                                            }
+                                                        </span></span>
+                                                        <span>Current: <span className="font-mono text-emerald-500">{editingProcurement.prNumber}</span></span>
+                                                    </div>
+                                                    <div className="flex justify-start">
+                                                        {isCheckingEditPr ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+                                                                <span className="text-[10px] text-slate-400 italic">Validating ID...</span>
+                                                            </div>
+                                                        ) : (editPrExists !== null && (
+                                                            editPrExists
+                                                                ? <span className="text-[10px] text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded animate-pulse">PR Existed</span>
+                                                                : <span className="text-[10px] text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">PR still not on Records</span>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </>
                                         )}
@@ -2273,12 +2408,84 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
 
                             {/* Monitoring Process (Standard Grid) */}
                             <div className="bg-[#0f172a] p-4 rounded-lg border border-slate-800 border-l-4 border-l-blue-500 space-y-4  mt-4 mb-4 shadow-sm min-h-[100px]">
-                                <div className="border-b border-slate-800 pb-2">
-                                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                                        <CalendarIcon className="h-4 w-4 text-blue-500" />
-                                        Monitoring Process
-                                    </h3>
-                                    <p className="text-xs text-slate-400">Update key dates. Use checkboxes to enable/disable steps.</p>
+                                <div className="border-b border-slate-800 pb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                                            <CalendarIcon className="h-4 w-4 text-blue-500" />
+                                            Monitoring Process
+                                        </h3>
+                                        <p className="text-xs text-slate-400">Update key dates. Use checkboxes to enable/disable steps.</p>
+                                    </div>
+                                    <div className="flex gap-2 shrink-0">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-[10px] h-6 px-2 bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700"
+                                            onClick={() => {
+                                                const today = format(new Date(), 'MM/dd/yyyy');
+                                                const isRegular = editingProcurement?.procurementType === 'Regular Bidding';
+                                                setEditingProcurement(prev => ({
+                                                    ...prev!,
+                                                    receivedPrDate: today,
+                                                    prDeliberatedDate: today,
+                                                    publishedDate: today,
+                                                    ...(isRegular ? {
+                                                        preBidDate: today,
+                                                        bidOpeningDate: today,
+                                                        bidEvaluationDate: today,
+                                                        bacResolutionDate: today,
+                                                        postQualDate: today,
+                                                        postQualReportDate: today,
+                                                        forwardedOapiDate: today,
+                                                        noaDate: today,
+                                                        contractDate: today,
+                                                        ntpDate: today,
+                                                        awardedToDate: today,
+                                                    } : {
+                                                        rfqCanvassDate: today,
+                                                        rfqOpeningDate: today,
+                                                        bacResolutionDate: today,
+                                                        forwardedGsdDate: today,
+                                                        poNtpForwardedGsdDate: today,
+                                                    })
+                                                }));
+                                            }}
+                                        >
+                                            Check All
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-[10px] h-6 px-2 bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700"
+                                            onClick={() => {
+                                                setEditingProcurement(prev => ({
+                                                    ...prev!,
+                                                    receivedPrDate: undefined,
+                                                    prDeliberatedDate: undefined,
+                                                    publishedDate: undefined,
+                                                    preBidDate: undefined,
+                                                    bidOpeningDate: undefined,
+                                                    bidEvaluationDate: undefined,
+                                                    bacResolutionDate: undefined,
+                                                    postQualDate: undefined,
+                                                    postQualReportDate: undefined,
+                                                    forwardedOapiDate: undefined,
+                                                    noaDate: undefined,
+                                                    contractDate: undefined,
+                                                    ntpDate: undefined,
+                                                    awardedToDate: undefined,
+                                                    rfqCanvassDate: undefined,
+                                                    rfqOpeningDate: undefined,
+                                                    forwardedGsdDate: undefined,
+                                                    poNtpForwardedGsdDate: undefined,
+                                                }));
+                                            }}
+                                        >
+                                            Uncheck All
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">

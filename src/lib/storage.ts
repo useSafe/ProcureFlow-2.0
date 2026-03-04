@@ -358,7 +358,8 @@ const recalculateStackNumbers = async (folderId?: string, boxId?: string): Promi
     if (folderId) {
         containerProcurements = allProcurements.filter(p => p.folderId === folderId);
     } else if (boxId) {
-        containerProcurements = allProcurements.filter(p => p.boxId === boxId);
+        // Only get loose files in the box (not in any folder)
+        containerProcurements = allProcurements.filter(p => p.boxId === boxId && !p.folderId);
     }
 
     // Filter for those that are "In Stack" (Archived/Available)
@@ -486,9 +487,7 @@ export const updateProcurement = async (
         if (updates.folderId && currentProcurement?.folderId && updates.folderId !== currentProcurement.folderId) {
             await recalculateStackNumbers(currentProcurement.folderId, undefined);
         }
-    }
-
-    if (boxId) {
+    } else if (boxId) {
         await recalculateStackNumbers(undefined, boxId);
         // If moving between boxes
         if (updates.boxId && currentProcurement?.boxId && updates.boxId !== currentProcurement.boxId) {
@@ -505,8 +504,7 @@ export const deleteProcurement = async (id: string): Promise<void> => {
 
     if (currentProcurement?.folderId) {
         await recalculateStackNumbers(currentProcurement.folderId, undefined);
-    }
-    if (currentProcurement?.boxId) {
+    } else if (currentProcurement?.boxId) {
         await recalculateStackNumbers(undefined, currentProcurement.boxId);
     }
 };
@@ -600,6 +598,14 @@ export const getLocationPath = async (procurement: Procurement): Promise<string>
 
         return path;
     }
+};
+
+export const recalculateAllFolders = async (): Promise<void> => {
+    const folders = await getFolders();
+    for (const folder of folders) {
+        await recalculateStackNumbers(folder.id, undefined);
+    }
+    console.log(`Recalculated stack numbers for ${folders.length} folders`);
 };
 
 // ========== Initialization ==========

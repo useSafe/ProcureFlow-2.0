@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { addProcurement, onDivisionsChange, addFolder } from '@/lib/storage';
+import { addProcurement, onDivisionsChange, addFolder, getProcurements } from '@/lib/storage';
 import { getProcessSteps, isStepDisabled } from '@/lib/validation-utils';
 import { useData } from '@/contexts/DataContext';
 import { Shelf, Folder, Box, ProcurementStatus, Division, ProcurementProcessStatus } from '@/types/procurement';
@@ -137,6 +137,13 @@ const AddProcurement: React.FC = () => {
     const [prMonth, setPrMonth] = useState(draft?.prMonth || format(new Date(), 'MMM').toUpperCase());
     const [prYear, setPrYear] = useState(draft?.prYear || format(new Date(), 'yyyy'));
     const [prSequence, setPrSequence] = useState(draft?.prSequence || '001');
+    const [isCheckingPr, setIsCheckingPr] = useState(false);
+    const [prExists, setPrExists] = useState<boolean | null>(null);
+
+    // Tracks whether the user has manually edited the sequence field.
+    // When true, automatic recalculation is suppressed so Firebase updates
+    // don't overwrite what the user typed.
+    const userEditedSequence = useRef(false);
 
     // Division Selection (End User)
     const [selectedDivisionId, setSelectedDivisionId] = useState(draft?.selectedDivisionId || '');
@@ -222,6 +229,31 @@ const AddProcurement: React.FC = () => {
         forwardedOapiDate, noaDate, contractDate, ntpDate, awardedToDate, checklist,
     ]);
 
+    // Live Validation for Duplicate PR
+    useEffect(() => {
+        const isPrComplete = prFormat === 'old'
+            ? !!(prDivisionId && prMonth && prYear && prSequence)
+            : !!(prMonth && prYear && prSequence);
+
+        if (!isPrComplete) {
+            setPrExists(null);
+            return;
+        }
+
+        const currentPrPreview = prFormat === 'old'
+            ? `${divisions.find(d => d.id === prDivisionId)?.abbreviation}-${prMonth}-${prYear.slice(-2)}-${prSequence}`
+            : `${prYear}-${prMonth}-${prSequence}`;
+
+        setIsCheckingPr(true);
+        const timer = setTimeout(() => {
+            const exists = procurements.some(p => p.prNumber === currentPrPreview);
+            setPrExists(exists);
+            setIsCheckingPr(false);
+        }, 500); // 500ms debounce/fake loading
+
+        return () => clearTimeout(timer);
+    }, [prFormat, prDivisionId, prMonth, prYear, prSequence, divisions, procurements]);
+
     // ── Clear Form handler ────────────────────────────────────────────────────
     const handleClearForm = useCallback(() => {
         clearDraft(userEmail);
@@ -272,12 +304,28 @@ const AddProcurement: React.FC = () => {
         setNtpDate('');
         setAwardedToDate('');
         setChecklist({});
+        // Re-enable auto-sequence calculation on clear
+        userEditedSequence.current = false;
         toast.success('Form cleared');
     }, [userEmail, user?.name]);
 
-
-    // Auto-generate Sequence based on PR format, Division (old only), and Year
+    // Reset the edit-guard whenever the structural PR fields change,
+    // so that switching division/format/year/month auto-recalculates
+    // the sequence even if the user had previously typed something.
     useEffect(() => {
+        userEditedSequence.current = false;
+    }, [prFormat, prDivisionId, prYear, prMonth]);
+
+
+    // Auto-generate Sequence based on PR format, Division (old only), and Year.
+    // The guard `userEditedSequence.current` prevents this effect from overwriting
+    // a value the user explicitly typed. It is reset when the structural fields
+    // (division / format / year / month) change, so the sequence auto-updates
+    // when those pivot fields change but NOT when Firebase pushes a new record.
+    useEffect(() => {
+        // If the user manually edited the sequence, respect their choice.
+        if (userEditedSequence.current) return;
+
         if (prYear) {
             if (prFormat === 'old') {
                 // Old format: DIV-MMM-YY-SEQ — needs division
@@ -323,7 +371,13 @@ const AddProcurement: React.FC = () => {
                 setPrSequence((maxSeq + 1).toString().padStart(3, '0'));
             }
         }
-    }, [prFormat, prDivisionId, prYear, divisions, procurements, prMonth]);
+        // NOTE: `procurements` is intentionally omitted from this dep array.
+        // Including it causes the sequence to be reset every time any user saves
+        // a record (because Firebase re-fires and updates the context). The initial
+        // calculation uses the loaded list, and the fresh read at submit-time
+        // (see handleSubmit) handles the concurrent-user race condition.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prFormat, prDivisionId, prYear, divisions, prMonth]);
 
 
     // Fetch Divisions
@@ -414,23 +468,84 @@ const AddProcurement: React.FC = () => {
             return;
         }
         // Validate PR Number construction
-        let constructedPrNumber = '';
         if (prFormat === 'old') {
-            const prDivisionAbbr = divisions.find(d => d.id === prDivisionId)?.abbreviation || 'XXX';
             if (!prDivisionId || !prMonth || !prYear || !prSequence) {
                 toast.error('Please complete all PR Number fields (Division, Month, Year, Sequence)');
                 return;
             }
-            constructedPrNumber = `${prDivisionAbbr}-${prMonth}-${prYear.slice(-2)}-${prSequence}`;
         } else {
             if (!prMonth || !prYear || !prSequence) {
                 toast.error('Please complete all PR Number fields (Month, Year, Sequence)');
                 return;
             }
-            constructedPrNumber = `${prYear}-${prMonth}-${prSequence}`;
         }
 
-        // ABC and Bid Amount Validation
+        // ── Load-Balancing: Fresh read from Firebase right before submit ──────
+        // This prevents the race condition where two concurrent users both see
+        // the same cached "next sequence" and submit duplicate PR numbers.
+        let finalSequence = prSequence;
+        try {
+            const freshProcurements = await getProcurements();
+            const prDivisionAbbr = divisions.find(d => d.id === prDivisionId)?.abbreviation || '';
+
+            if (prFormat === 'old' && prDivisionAbbr) {
+                const yearStr = `-${prYear}-`;
+                const divStr = `${prDivisionAbbr}-`;
+                const matching = freshProcurements.filter(p =>
+                    p.prNumber.startsWith(divStr) && p.prNumber.includes(yearStr)
+                );
+                let maxSeq = 0;
+                matching.forEach(p => {
+                    const parts = p.prNumber.split('-');
+                    if (parts.length >= 4) {
+                        const seq = parseInt(parts[3]);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                });
+                const freshNext = (maxSeq + 1).toString().padStart(3, '0');
+                // If the fresh max is higher than what the user sees, bump up
+                if (parseInt(freshNext) > parseInt(prSequence)) {
+                    finalSequence = freshNext;
+                    toast.info(`⚡ Sequence updated to ${freshNext} to avoid conflict with another user's record.`);
+                }
+            } else if (prFormat === 'new') {
+                const yearStr = `${prYear}-`;
+                const matching = freshProcurements.filter(p => p.prNumber.startsWith(yearStr));
+                let maxSeq = 0;
+                matching.forEach(p => {
+                    const parts = p.prNumber.split('-');
+                    if (parts.length >= 3) {
+                        const seq = parseInt(parts[2]);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                });
+                const freshNext = (maxSeq + 1).toString().padStart(3, '0');
+                if (parseInt(freshNext) > parseInt(prSequence)) {
+                    finalSequence = freshNext;
+                    toast.info(`⚡ Sequence updated to ${freshNext} to avoid conflict with another user's record.`);
+                }
+            }
+        } catch (err) {
+            // If fresh read fails, fall back to cached value (still saves)
+            console.warn('Could not fetch fresh procurements for race-condition check:', err);
+        }
+
+        // Build the final PR number using the confirmed sequence
+        const prDivisionAbbrFinal = divisions.find(d => d.id === prDivisionId)?.abbreviation || 'XXX';
+        let constructedPrNumber = '';
+        if (prFormat === 'old') {
+            constructedPrNumber = `${prDivisionAbbrFinal}-${prMonth}-${prYear.slice(-2)}-${finalSequence}`;
+        } else {
+            constructedPrNumber = `${prYear}-${prMonth}-${finalSequence}`;
+        }
+
+        // Check for duplicate PR number (warning only, still saves)
+        const isDuplicate = procurements.some(p => p.prNumber === constructedPrNumber);
+        if (isDuplicate) {
+            toast.warning(`⚠️ PR Number "${constructedPrNumber}" already exists. Saving anyway...`);
+        }
+
+
         const cleanAbc = abc ? parseFloat(removeCommas(abc)) : 0;
         const cleanBid = bidAmount ? parseFloat(removeCommas(bidAmount)) : 0;
 
@@ -706,7 +821,7 @@ const AddProcurement: React.FC = () => {
                                                 <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
                                                     {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
                                                         <SelectItem key={div.id} value={div.id}>
-                                                            {div.abbreviation} - {div.name}
+                                                            {div.name} ({div.abbreviation})
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -746,22 +861,43 @@ const AddProcurement: React.FC = () => {
                                         <Label className="text-xs text-slate-400">Sequence</Label>
                                         <Input
                                             value={prSequence}
-                                            onChange={(e) => setPrSequence(e.target.value)}
-                                            maxLength={4}
+                                            onChange={(e) => {
+                                                // Mark that the user has taken ownership of the sequence.
+                                                // This prevents Firebase context updates from overwriting it.
+                                                userEditedSequence.current = true;
+                                                setPrSequence(e.target.value);
+                                            }}
+                                            maxLength={7}
                                             className="bg-[#1e293b] border-slate-700 text-white"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="mt-2 text-sm text-slate-400">
-                                    Preview: <span className="font-mono text-emerald-400 font-bold ml-2">
-                                        {prFormat === 'old'
-                                            ? (prDivisionId && divisions.find(d => d.id === prDivisionId)
-                                                ? `${divisions.find(d => d.id === prDivisionId)?.abbreviation}-${prMonth}-${prYear}-${prSequence}`
-                                                : 'XXX-XXX-XX-XXX')
-                                            : (prYear && prMonth && prSequence ? `${prYear}-${prMonth}-${prSequence}` : 'XXXX-XXX-XXXX')
-                                        }
-                                    </span>
+                                <div className="mt-2 text-sm text-slate-400 flex items-center justify-between">
+                                    <div>
+                                        Preview: <span className="font-mono text-emerald-400 font-bold ml-2">
+                                            {prFormat === 'old'
+                                                ? (prDivisionId && divisions.find(d => d.id === prDivisionId)
+                                                    ? `${divisions.find(d => d.id === prDivisionId)?.abbreviation}-${prMonth}-${prYear.slice(-2)}-${prSequence}`
+                                                    : 'XXX-XXX-XX-XXX')
+                                                : (prYear && prMonth && prSequence ? `${prYear}-${prMonth}-${prSequence}` : 'XXXX-XXX-XXXX')
+                                            }
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                        <div className="flex items-center gap-2">
+                                            {isCheckingPr ? (
+                                                <>
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                                                    <span className="text-xs text-slate-400 italic">Validating ID...</span>
+                                                </>
+                                            ) : (prExists !== null && (
+                                                prExists
+                                                    ? <span className="text-xs text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded animate-pulse">PR Existed</span>
+                                                    : <span className="text-xs text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">PR still not on Records</span>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -774,7 +910,7 @@ const AddProcurement: React.FC = () => {
                                     </SelectTrigger>
                                     <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
                                         {[...divisions].sort((a, b) => a.name.localeCompare(b.name)).map(div => (
-                                            <SelectItem key={div.id} value={div.id}>{div.name}</SelectItem>
+                                            <SelectItem key={div.id} value={div.id}>{div.name} ({div.abbreviation})</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -1017,11 +1153,76 @@ const AddProcurement: React.FC = () => {
                     {/* TAB 2: Monitoring Process */}
                     <Card className="border-none bg-[#0f172a] shadow-lg">
                         <CardContent className="p-6 space-y-6">
-                            <div className="border-b border-slate-800 pb-2">
-                                <h3 className="text-lg font-semibold text-white">
-                                    {formMode === 'Regular' ? 'Regular Bidding Monitoring Progress' : 'SVP Monitoring Process'}
-                                    <span className="ml-2 text-slate-500 text-xs font-normal">(Optional — check dates as they are completed)</span>
-                                </h3>
+                            <div className="border-b border-slate-800 pb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white">
+                                        {formMode === 'Regular' ? 'Regular Bidding Monitoring Progress' : 'SVP Monitoring Process'}
+                                        <span className="ml-2 text-slate-500 text-xs font-normal">(Optional — check dates as they are completed)</span>
+                                    </h3>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs h-7 bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700"
+                                        onClick={() => {
+                                            const today = format(new Date(), 'MM/dd/yyyy');
+                                            setReceivedPrDate(today);
+                                            setPrDeliberatedDate(today);
+                                            setPublishedDate(today);
+                                            if (formMode === 'Regular') {
+                                                setPreBidDate(today);
+                                                setBidOpeningDate(today);
+                                                setBidEvaluationDate(today);
+                                                setBacResolutionDate(today);
+                                                setPostQualDate(today);
+                                                setPostQualReportDate(today);
+                                                setForwardedOapiDate(today);
+                                                setNoaDate(today);
+                                                setContractDate(today);
+                                                setNtpDate(today);
+                                                setAwardedToDate(today);
+                                            } else {
+                                                setRfqCanvassDate(today);
+                                                setRfqOpeningDate(today);
+                                                setBacResolutionDate(today);
+                                                setForwardedGsdDate(today);
+                                                setPoNtpForwardedGsdDate(today);
+                                            }
+                                        }}
+                                    >
+                                        Check All
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs h-7 bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700"
+                                        onClick={() => {
+                                            setReceivedPrDate('');
+                                            setPrDeliberatedDate('');
+                                            setPublishedDate('');
+                                            setPreBidDate('');
+                                            setBidOpeningDate('');
+                                            setBidEvaluationDate('');
+                                            setBacResolutionDate('');
+                                            setPostQualDate('');
+                                            setPostQualReportDate('');
+                                            setForwardedOapiDate('');
+                                            setNoaDate('');
+                                            setContractDate('');
+                                            setNtpDate('');
+                                            setAwardedToDate('');
+                                            setRfqCanvassDate('');
+                                            setRfqOpeningDate('');
+                                            setForwardedGsdDate('');
+                                            setPoNtpForwardedGsdDate('');
+                                        }}
+                                    >
+                                        Uncheck All
+                                    </Button>
+                                </div>
                             </div>
 
                             <div className="space-y-6 pt-4 pb-6">

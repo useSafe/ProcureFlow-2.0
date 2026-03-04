@@ -56,14 +56,31 @@ const Dashboard: React.FC = () => {
         };
     }, []);
 
+    // Helper: extract 4-digit year from any PR number format
+    const extractPrYear = (prNumber: string): string | null => {
+        // New format: YYYY-MMM-SEQ (e.g. 2025-JAN-001)
+        const newMatch = prNumber.match(/^(\d{4})-/);
+        if (newMatch) return newMatch[1];
+        // Old format: DIV-MMM-YY-SEQ (e.g. GSSO-JAN-25-001)
+        const oldMatch = prNumber.match(/^[A-Za-z]+-[A-Za-z]+-([0-9]{2,4})-/);
+        if (oldMatch) {
+            const yr = oldMatch[1];
+            if (yr.length === 2) {
+                // 2-digit year: assume 2000+
+                return (2000 + parseInt(yr)).toString();
+            }
+            return yr; // already 4 digits
+        }
+        return null;
+    };
+
     // Compute Available Years
     const availableYears = useMemo(() => {
         const years = new Set<string>();
         procurements.forEach(p => {
-            // Match YYYY- at start of PR number
-            const match = p.prNumber.match(/^(\d{4})-/);
-            if (match) {
-                years.add(match[1]);
+            const yr = extractPrYear(p.prNumber);
+            if (yr) {
+                years.add(yr);
             } else if (p.createdAt) {
                 try {
                     years.add(new Date(p.createdAt).getFullYear().toString());
@@ -79,8 +96,8 @@ const Dashboard: React.FC = () => {
     const filteredProcurements = useMemo(() => {
         if (selectedYear === 'all') return procurements;
         return procurements.filter(p => {
-            const match = p.prNumber.match(/^(\d{4})-/);
-            if (match) return match[1] === selectedYear;
+            const yr = extractPrYear(p.prNumber);
+            if (yr) return yr === selectedYear;
             if (p.createdAt) {
                 return new Date(p.createdAt).getFullYear().toString() === selectedYear;
             }
