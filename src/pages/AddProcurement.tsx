@@ -116,7 +116,6 @@ const AddProcurement: React.FC = () => {
     const [supplier, setSupplier] = useState(draft?.supplier || '');
 
     // Additional Fields
-    const [notes, setNotes] = useState(draft?.notes || '');
     const [staffIncharge, setStaffIncharge] = useState(draft?.staffIncharge || user?.name || '');
 
     // Borrowed Information
@@ -191,7 +190,7 @@ const AddProcurement: React.FC = () => {
             formMode, activeTab,
             projectName, description, status, procurementProcessStatus,
             dateStatusUpdated: dateStatusUpdated?.toISOString(),
-            abc, bidAmount, supplier, notes, staffIncharge,
+            abc, bidAmount, supplier, staffIncharge,
             borrowerName, borrowingDivisionId,
             borrowedDate: borrowedDate?.toISOString(),
             dateAdded: dateAdded?.toISOString(),
@@ -219,7 +218,7 @@ const AddProcurement: React.FC = () => {
         });
     }, [
         formMode, activeTab, projectName, description, status, procurementProcessStatus,
-        dateStatusUpdated, abc, bidAmount, supplier, notes, staffIncharge,
+        dateStatusUpdated, abc, bidAmount, supplier, staffIncharge,
         borrowerName, borrowingDivisionId, borrowedDate, dateAdded,
         prFormat, prDivisionId, prMonth, prYear, prSequence, selectedDivisionId,
         storageMode, cabinetId, shelfId, folderId, boxId,
@@ -621,7 +620,8 @@ const AddProcurement: React.FC = () => {
                 abc: abc ? parseFloat(removeCommas(abc)) : undefined,
                 bidAmount: bidAmount ? parseFloat(removeCommas(bidAmount)) : undefined,
                 supplier: supplier || undefined,
-                notes,
+                staffIncharge: staffIncharge || undefined,
+                borrowerName: borrowerName || undefined,
                 remarks: description, // Mapping description to remarks explicitly too
 
                 // Dates - Common
@@ -985,17 +985,6 @@ const AddProcurement: React.FC = () => {
                                             className="bg-[#1e293b] border-slate-700 text-white"
                                         />
                                     </div>
-                                </div>
-
-                                <div className="space-y-2 mt-4">
-                                    <Label className="text-slate-300">Notes <span className="text-slate-500 text-xs">(Optional)</span></Label>
-                                    <Textarea
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        placeholder="Enter any additional notes or important information..."
-                                        className="bg-[#1e293b] border-slate-700 text-white min-h-[80px] resize-y"
-                                        rows={3}
-                                    />
                                 </div>
                             </div>
 

@@ -3,6 +3,7 @@ import { User, AuthState } from '@/types/procurement';
 import { getStoredUser, setStoredUser } from '@/lib/storage';
 import { db } from '@/lib/firebase';
 import { ref, get } from 'firebase/database';
+import { logActivity } from '@/lib/activity-logger';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -81,7 +82,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Login success
             setUser(foundUser);
             setStoredUser(foundUser);
-
+            // Log the login event
+            logActivity('login', 'account', foundUser.name, foundUser.email, foundUser.name);
             return { success: true };
           }
 
@@ -98,6 +100,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    // Log logout before clearing user
+    const currentStoredUser = getStoredUser();
+    if (currentStoredUser) {
+      logActivity('logout', 'account', currentStoredUser.name, currentStoredUser.email, currentStoredUser.name);
+    }
     setUser(null);
     setStoredUser(null);
   };

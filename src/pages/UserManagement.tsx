@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { User } from '@/types/procurement';
 import { onUsersChange, addUser, updateUser, deleteUser } from '@/lib/storage';
+import { onActivityLogsChange, ActivityLog, ACTION_LABELS, ACTION_COLORS, ENTITY_LABELS } from '@/lib/activity-logger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -43,8 +44,8 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Search, Plus, Trash2, Edit, Shield, ShieldAlert, Key, User as UserIcon, Mail, Lock, Eye, EyeOff, Sparkles, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, Plus, Trash2, Edit, Shield, ShieldAlert, Key, User as UserIcon, Mail, Lock, Eye, EyeOff, Sparkles, CheckCircle2, XCircle, AlertCircle, Activity, Clock, LogIn, LogOut, FilePlus, FileEdit, FileX, Users } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -53,6 +54,17 @@ const UserManagement: React.FC = () => {
     const navigate = useNavigate();
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Tab state
+    const [activeTab, setActiveTab] = useState<'users' | 'activity'>('users');
+
+    // Activity Logs state
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+    const [logSearch, setLogSearch] = useState('');
+    const [logActionFilter, setLogActionFilter] = useState('all');
+    const [logEntityFilter, setLogEntityFilter] = useState('all');
+    const [logPage, setLogPage] = useState(1);
+    const LOGS_PER_PAGE = 20;
 
     // Password visibility states
     const [showPassword, setShowPassword] = useState(false);
@@ -97,7 +109,12 @@ const UserManagement: React.FC = () => {
             setIsLoading(false);
         });
 
-        return () => unsub();
+        const unsubLogs = onActivityLogsChange(setActivityLogs, 500);
+
+        return () => {
+            unsub();
+            unsubLogs();
+        };
     }, [currentUser, navigate]);
 
     // Password strength calculator
@@ -318,6 +335,30 @@ const UserManagement: React.FC = () => {
     // If unauthorized, don't verify (handled by useEffect redirect) but return null to avoid flash
     if (currentUser?.role !== 'admin') return null;
 
+    // ── Activity Log derived state ────────────────────────────────────────
+    const filteredLogs = activityLogs.filter(log => {
+        const matchesSearch =
+            log.entityName.toLowerCase().includes(logSearch.toLowerCase()) ||
+            log.userName.toLowerCase().includes(logSearch.toLowerCase()) ||
+            log.userEmail.toLowerCase().includes(logSearch.toLowerCase());
+        const matchesAction = logActionFilter === 'all' || log.action === logActionFilter;
+        const matchesEntity = logEntityFilter === 'all' || log.entity === logEntityFilter;
+        return matchesSearch && matchesAction && matchesEntity;
+    });
+    const totalLogPages = Math.max(1, Math.ceil(filteredLogs.length / LOGS_PER_PAGE));
+    const paginatedLogs = filteredLogs.slice((logPage - 1) * LOGS_PER_PAGE, logPage * LOGS_PER_PAGE);
+
+    const getActionIcon = (action: string) => {
+        switch (action) {
+            case 'login': return <LogIn className="h-3.5 w-3.5" />;
+            case 'logout': return <LogOut className="h-3.5 w-3.5" />;
+            case 'add': return <FilePlus className="h-3.5 w-3.5" />;
+            case 'edit': return <FileEdit className="h-3.5 w-3.5" />;
+            case 'delete': return <FileX className="h-3.5 w-3.5" />;
+            default: return <Activity className="h-3.5 w-3.5" />;
+        }
+    };
+
     return (
         <>
             <div className="space-y-6 fade-in animate-in duration-500">
@@ -326,179 +367,343 @@ const UserManagement: React.FC = () => {
                         <h1 className="text-3xl font-bold text-white">User Management</h1>
                         <p className="text-slate-400">Manage system access and roles</p>
                     </div>
-                    <Button onClick={() => { resetForm(); setIsAddOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
-                        <Plus className="mr-2 h-4 w-4" /> Add User
-                    </Button>
+                    {activeTab === 'users' && (
+                        <Button onClick={() => { resetForm(); setIsAddOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
+                            <Plus className="mr-2 h-4 w-4" /> Add User
+                        </Button>
+                    )}
                 </div>
 
-                <Card className="bg-[#0f172a] border-slate-800">
-                    <CardHeader className="pb-4">
-                        <CardTitle className="text-white">Users</CardTitle>
-                        <div className="flex gap-2 mt-4">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <Input
-                                    placeholder="Search users..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 bg-[#1e293b] border-slate-700 text-white placeholder:text-slate-500"
-                                />
+                {/* Tab Switcher */}
+                <div className="flex bg-[#0f172a] rounded-xl border border-slate-800 p-1 gap-1 w-fit">
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'users'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                    >
+                        <Users className="h-4 w-4" />
+                        Users
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('activity')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'activity'
+                            ? 'bg-purple-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                    >
+                        <Activity className="h-4 w-4" />
+                        Activity Logs
+                        {activityLogs.length > 0 && (
+                            <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-purple-500/30 text-purple-300 text-[10px] font-medium">
+                                {activityLogs.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {/* ── USERS TAB ──────────────────────────────── */}
+                {activeTab === 'users' && (<>
+                    <Card className="bg-[#0f172a] border-slate-800">
+                        <CardHeader className="pb-4">
+                            <CardTitle className="text-white">Users</CardTitle>
+                            <div className="flex gap-2 mt-4">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <Input
+                                        placeholder="Search users..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="pl-10 bg-[#1e293b] border-slate-700 text-white placeholder:text-slate-500"
+                                    />
+                                </div>
+                                <Select value={roleFilter} onValueChange={(v: any) => setRoleFilter(v)}>
+                                    <SelectTrigger className="w-[150px] bg-[#1e293b] border-slate-700 text-white">
+                                        <SelectValue placeholder="Role" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                        <SelectItem value="all">All Roles</SelectItem>
+                                        <SelectItem value="admin">Admin</SelectItem>
+                                        <SelectItem value="bac-staff">BAC Staff</SelectItem>
+                                        <SelectItem value="archiver">Archiver</SelectItem>
+                                        <SelectItem value="viewer">Viewer</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+                                    <SelectTrigger className="w-[150px] bg-[#1e293b] border-slate-700 text-white">
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                        <SelectItem value="all">All Status</SelectItem>
+                                        <SelectItem value="active">Active</SelectItem>
+                                        <SelectItem value="inactive">Inactive</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                            <Select value={roleFilter} onValueChange={(v: any) => setRoleFilter(v)}>
-                                <SelectTrigger className="w-[150px] bg-[#1e293b] border-slate-700 text-white">
-                                    <SelectValue placeholder="Role" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                    <SelectItem value="all">All Roles</SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="bac-staff">BAC Staff</SelectItem>
-                                    <SelectItem value="archiver">Archiver</SelectItem>
-                                    <SelectItem value="viewer">Viewer</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-                                <SelectTrigger className="w-[150px] bg-[#1e293b] border-slate-700 text-white">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="inactive">Inactive</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="border-slate-800 hover:bg-transparent">
-                                    <TableHead className="text-slate-300">User</TableHead>
-                                    <TableHead className="text-slate-300">Role</TableHead>
-                                    <TableHead className="text-slate-300">Status</TableHead>
-                                    <TableHead className="text-slate-300">Password</TableHead>
-                                    <TableHead className="text-slate-300">Created At</TableHead>
-                                    <TableHead className="text-right text-slate-300">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {paginatedUsers.map((user) => (
-                                    <TableRow key={user.id} className="border-slate-800 hover:bg-[#1e293b]">
-                                        <TableCell>
-                                            <div>
-                                                <p className="font-medium text-white">{user.name}</p>
-                                                <p className="text-xs text-slate-400">{user.email}</p>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            {(() => {
-                                                switch (user.role) {
-                                                    case 'admin':
-                                                        return (
-                                                            <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20">
-                                                                <Shield className="w-3 h-3 mr-1" /> Admin
-                                                            </Badge>
-                                                        );
-                                                    case 'bac-staff':
-                                                        return (
-                                                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20">
-                                                                <Shield className="w-3 h-3 mr-1" /> BAC Staff
-                                                            </Badge>
-                                                        );
-                                                    case 'viewer':
-                                                        return (
-                                                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20">
-                                                                <UserIcon className="w-3 h-3 mr-1" /> Viewer
-                                                            </Badge>
-                                                        );
-                                                    case 'archiver':
-                                                        return (
-                                                            <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20">
-                                                                <Shield className="w-3 h-3 mr-1" /> Archiver
-                                                            </Badge>
-                                                        );
-                                                    default:
-                                                        return (
-                                                            <Badge className="bg-slate-500/10 text-slate-400 border-slate-500/20 hover:bg-slate-500/20">
-                                                                <UserIcon className="w-3 h-3 mr-1" /> User
-                                                            </Badge>
-                                                        );
-                                                }
-                                            })()}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Switch
-                                                    checked={user.status === 'active'}
-                                                    onCheckedChange={() => toggleStatus(user)}
-                                                    className="data-[state=checked]:bg-green-600"
-                                                    disabled={user.email === 'admin@gmail.com'}
-                                                />
-                                                <span className={`text-xs ${user.status === 'active' ? 'text-green-500' : 'text-slate-500'}`}>
-                                                    {user.status === 'active' ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-1 text-slate-500 font-mono text-xs bg-slate-950 p-1 px-2 rounded w-fit border border-slate-800">
-                                                <Key className="w-3 h-3" />
-                                                {user.password || '•••••'}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-slate-400 text-xs">
-                                            {user.createdAt ? format(new Date(user.createdAt), 'MMM d, yyyy - hh:mm a') : '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <Button variant="ghost" size="icon" onClick={() => openEdit(user)} className="h-8 w-8 text-slate-400 hover:text-white">
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                {user.email !== 'admin@gmail.com' && (
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(user)} className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
-                                                        <Trash2 className="h-4 w-4" />
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-slate-800 hover:bg-transparent">
+                                        <TableHead className="text-slate-300">User</TableHead>
+                                        <TableHead className="text-slate-300">Role</TableHead>
+                                        <TableHead className="text-slate-300">Status</TableHead>
+                                        <TableHead className="text-slate-300">Password</TableHead>
+                                        <TableHead className="text-slate-300">Created At</TableHead>
+                                        <TableHead className="text-right text-slate-300">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {paginatedUsers.map((user) => (
+                                        <TableRow key={user.id} className="border-slate-800 hover:bg-[#1e293b]">
+                                            <TableCell>
+                                                <div>
+                                                    <p className="font-medium text-white">{user.name}</p>
+                                                    <p className="text-xs text-slate-400">{user.email}</p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {(() => {
+                                                    switch (user.role) {
+                                                        case 'admin':
+                                                            return (
+                                                                <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20">
+                                                                    <Shield className="w-3 h-3 mr-1" /> Admin
+                                                                </Badge>
+                                                            );
+                                                        case 'bac-staff':
+                                                            return (
+                                                                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20">
+                                                                    <Shield className="w-3 h-3 mr-1" /> BAC Staff
+                                                                </Badge>
+                                                            );
+                                                        case 'viewer':
+                                                            return (
+                                                                <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20">
+                                                                    <UserIcon className="w-3 h-3 mr-1" /> Viewer
+                                                                </Badge>
+                                                            );
+                                                        case 'archiver':
+                                                            return (
+                                                                <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20">
+                                                                    <Shield className="w-3 h-3 mr-1" /> Archiver
+                                                                </Badge>
+                                                            );
+                                                        default:
+                                                            return (
+                                                                <Badge className="bg-slate-500/10 text-slate-400 border-slate-500/20 hover:bg-slate-500/20">
+                                                                    <UserIcon className="w-3 h-3 mr-1" /> User
+                                                                </Badge>
+                                                            );
+                                                    }
+                                                })()}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={user.status === 'active'}
+                                                        onCheckedChange={() => toggleStatus(user)}
+                                                        className="data-[state=checked]:bg-green-600"
+                                                        disabled={user.email === 'admin@gmail.com'}
+                                                    />
+                                                    <span className={`text-xs ${user.status === 'active' ? 'text-green-500' : 'text-slate-500'}`}>
+                                                        {user.status === 'active' ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-1 text-slate-500 font-mono text-xs bg-slate-950 p-1 px-2 rounded w-fit border border-slate-800">
+                                                    <Key className="w-3 h-3" />
+                                                    {user.password || '•••••'}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-slate-400 text-xs">
+                                                {user.createdAt ? format(new Date(user.createdAt), 'MMM d, yyyy - hh:mm a') : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => openEdit(user)} className="h-8 w-8 text-slate-400 hover:text-white">
+                                                        <Edit className="h-4 w-4" />
                                                     </Button>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {paginatedUsers.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center text-slate-500 h-24">No users found.</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                                    {user.email !== 'admin@gmail.com' && (
+                                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(user)} className="h-8 w-8 text-red-500 hover:text-red-400 hover:bg-red-500/10">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {paginatedUsers.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center text-slate-500 h-24">No users found.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
 
-                {/* Pagination Controls */}
-                <div className="flex justify-between items-center text-sm text-slate-400">
-                    <div>Page {currentPage} of {totalPages || 1}</div>
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="border-slate-700 bg-transparent hover:bg-slate-800 text-white hover:text-white disabled:opacity-50"
-                        >
-                            Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage >= totalPages}
-                            className="border-slate-700 bg-transparent hover:bg-slate-800 text-white hover:text-white disabled:opacity-50"
-                        >
-                            Next
-                        </Button>
+                    {/* Users Pagination */}
+                    <div className="flex justify-between items-center text-sm text-slate-400">
+                        <div>Page {currentPage} of {totalPages || 1}</div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline" size="sm"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="border-slate-700 bg-transparent hover:bg-slate-800 text-white hover:text-white disabled:opacity-50"
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline" size="sm"
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage >= totalPages}
+                                className="border-slate-700 bg-transparent hover:bg-slate-800 text-white hover:text-white disabled:opacity-50"
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            </div>
+
+                </>) /* end Users tab */}
+
+                {/* ── ACTIVITY LOGS TAB ──────────────────────── */}
+                {activeTab === 'activity' && (
+                    <Card className="bg-[#0f172a] border-slate-800">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-white flex items-center gap-2">
+                                <Activity className="h-5 w-5 text-purple-400" />
+                                Activity Logs
+                            </CardTitle>
+                            <p className="text-xs text-slate-400">Showing last 500 events. Newest first.</p>
+                            {/* Filters */}
+                            <div className="flex flex-wrap gap-2 mt-3">
+                                <div className="relative flex-1 min-w-[180px]">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <Input
+                                        placeholder="Search user or entity..."
+                                        value={logSearch}
+                                        onChange={(e) => { setLogSearch(e.target.value); setLogPage(1); }}
+                                        className="pl-10 bg-[#1e293b] border-slate-700 text-white placeholder:text-slate-500 h-9 text-xs"
+                                    />
+                                </div>
+                                <Select value={logActionFilter} onValueChange={(v) => { setLogActionFilter(v); setLogPage(1); }}>
+                                    <SelectTrigger className="w-[140px] bg-[#1e293b] border-slate-700 text-white h-9 text-xs">
+                                        <SelectValue placeholder="Action" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                        <SelectItem value="all">All Actions</SelectItem>
+                                        <SelectItem value="login">Log In</SelectItem>
+                                        <SelectItem value="logout">Log Out</SelectItem>
+                                        <SelectItem value="add">Added</SelectItem>
+                                        <SelectItem value="edit">Edited</SelectItem>
+                                        <SelectItem value="delete">Deleted</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={logEntityFilter} onValueChange={(v) => { setLogEntityFilter(v); setLogPage(1); }}>
+                                    <SelectTrigger className="w-[150px] bg-[#1e293b] border-slate-700 text-white h-9 text-xs">
+                                        <SelectValue placeholder="Entity" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#1e293b] border-slate-700 text-white">
+                                        <SelectItem value="all">All Entities</SelectItem>
+                                        <SelectItem value="account">Account</SelectItem>
+                                        <SelectItem value="division">Division</SelectItem>
+                                        <SelectItem value="folder">Folder</SelectItem>
+                                        <SelectItem value="cabinet">Drawer</SelectItem>
+                                        <SelectItem value="drawer">Cabinet</SelectItem>
+                                        <SelectItem value="box">Box</SelectItem>
+                                        <SelectItem value="file">File (Procurement)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-slate-800 hover:bg-transparent">
+                                        <TableHead className="text-slate-300 w-[130px]">Action</TableHead>
+                                        <TableHead className="text-slate-300 w-[110px]">Entity</TableHead>
+                                        <TableHead className="text-slate-300">Name / Target</TableHead>
+                                        <TableHead className="text-slate-300">User</TableHead>
+                                        <TableHead className="text-slate-300 w-[160px]">
+                                            <div className="flex items-center gap-1">
+                                                <Clock className="h-3.5 w-3.5" /> Timestamp
+                                            </div>
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {paginatedLogs.map((log) => (
+                                        <TableRow key={log.id} className="border-slate-800 hover:bg-[#1e293b]">
+                                            <TableCell>
+                                                <Badge className={`flex items-center gap-1 w-fit text-xs font-medium border ${ACTION_COLORS[log.action]}`}>
+                                                    {getActionIcon(log.action)}
+                                                    {ACTION_LABELS[log.action]}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-slate-300 text-xs">
+                                                    {ENTITY_LABELS[log.entity] || log.entity}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-white text-sm max-w-[260px] truncate" title={log.entityName}>
+                                                {log.entityName}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div>
+                                                    <p className="text-white text-xs font-medium">{log.userName}</p>
+                                                    <p className="text-slate-500 text-[10px]">{log.userEmail}</p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-slate-400 text-xs">
+                                                <div className="space-y-0.5">
+                                                    <p>{format(new Date(log.timestamp), 'MMM d, yyyy')}</p>
+                                                    <p className="text-slate-500">{format(new Date(log.timestamp), 'hh:mm:ss a')}</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {paginatedLogs.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center text-slate-500 h-24">
+                                                No activity logs found.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                            {/* Pagination */}
+                            <div className="flex justify-between items-center mt-4 text-sm text-slate-400">
+                                <div>Page {logPage} of {totalLogPages} &bull; {filteredLogs.length} events</div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline" size="sm"
+                                        onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                                        disabled={logPage === 1}
+                                        className="border-slate-700 bg-transparent hover:bg-slate-800 text-white hover:text-white disabled:opacity-50"
+                                    >
+                                        Previous
+                                    </Button>
+                                    <Button
+                                        variant="outline" size="sm"
+                                        onClick={() => setLogPage(p => Math.min(totalLogPages, p + 1))}
+                                        disabled={logPage >= totalLogPages}
+                                        className="border-slate-700 bg-transparent hover:bg-slate-800 text-white hover:text-white disabled:opacity-50"
+                                    >
+                                        Next
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+            </div >
 
             {/* Add User Modal */}
-            <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setShowPassword(false); setEmailError(''); setPasswordError(''); setPasswordStrength(0); } }}>
+            < Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setShowPassword(false); setEmailError(''); setPasswordError(''); setPasswordStrength(0); } }}>
                 <DialogContent className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] border-slate-700 text-white max-w-2xl">
                     <DialogHeader className="border-b border-slate-700 pb-4">
                         <div className="flex items-center gap-3">
@@ -693,7 +898,7 @@ const UserManagement: React.FC = () => {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
                 <AlertDialogContent className="bg-[#1e293b] border-slate-700 text-white">

@@ -1,6 +1,7 @@
 import { Cabinet, Shelf, Folder, Box, Division, Procurement, User, LocationStats } from '@/types/procurement';
 import { db } from './firebase';
 import { ref, get, set, remove, push, child, onValue, update } from 'firebase/database';
+import { logActivity } from './activity-logger';
 
 // ========== User Storage ==========
 // We'll keep user storage local for now as it's just a simple simulation
@@ -137,11 +138,13 @@ export const addCabinet = async (name: string, code: string, description?: strin
         createdAt: new Date().toISOString(),
     };
     await set(ref(db, 'cabinets/' + id), newCabinet);
+    logActivity('add', 'cabinet', `${newCabinet.name} (${newCabinet.code})`, 'system', 'system');
     return newCabinet;
 };
 
 export const updateCabinet = async (id: string, updates: Partial<Cabinet>): Promise<void> => {
     await update(ref(db, 'cabinets/' + id), updates);
+    logActivity('edit', 'cabinet', updates.name || id, 'system', 'system');
 };
 
 export const deleteCabinet = async (id: string): Promise<void> => {
@@ -167,6 +170,7 @@ export const deleteCabinet = async (id: string): Promise<void> => {
 
     // 3. Delete Cabinet
     await remove(ref(db, 'cabinets/' + id));
+    logActivity('delete', 'cabinet', id, 'system', 'system');
 };
 
 // --- Shelf ---
@@ -181,6 +185,7 @@ export const addShelf = async (cabinetId: string, name: string, code: string, de
         createdAt: new Date().toISOString(),
     };
     await set(ref(db, 'shelves/' + id), newShelf);
+    logActivity('add', 'drawer', `${newShelf.name} (${newShelf.code})`, 'system', 'system');
     return newShelf;
 };
 
@@ -207,6 +212,7 @@ export const deleteShelf = async (id: string): Promise<void> => {
 
     // 3. Delete Shelf
     await remove(ref(db, 'shelves/' + id));
+    logActivity('delete', 'drawer', id, 'system', 'system');
 };
 
 // --- Folder ---
@@ -245,6 +251,7 @@ export const addFolder = async (
     }
 
     await set(ref(db, 'folders/' + id), newFolder);
+    logActivity('add', 'folder', `${newFolder.name} (${newFolder.code})`, 'system', 'system');
     return newFolder;
 };
 
@@ -260,6 +267,7 @@ export const deleteFolder = async (id: string): Promise<void> => {
         throw new Error("Cannot delete Folder: It contains active records. Please move or delete them first.");
     }
     await remove(ref(db, 'folders/' + id));
+    logActivity('delete', 'folder', id, 'system', 'system');
 };
 
 // --- Box ---
@@ -281,6 +289,7 @@ export const addBox = async (
     if (boxData.shelfId) newBox.shelfId = boxData.shelfId;
 
     await set(ref(db, 'boxes/' + id), newBox);
+    logActivity('add', 'box', `${newBox.name} (${newBox.code})`, 'system', 'system');
     return newBox;
 };
 
@@ -319,6 +328,7 @@ export const deleteBox = async (id: string): Promise<void> => {
     }
 
     await remove(ref(db, 'boxes/' + id));
+    logActivity('delete', 'box', id, 'system', 'system');
 };
 
 // --- Division ---
@@ -332,6 +342,7 @@ export const addDivision = async (name: string, abbreviation: string, endUser?: 
         createdAt: new Date().toISOString(),
     };
     await set(ref(db, 'divisions/' + id), newDivision);
+    logActivity('add', 'division', `${newDivision.name} (${newDivision.abbreviation})`, 'system', 'system');
     return newDivision;
 };
 
@@ -340,9 +351,8 @@ export const updateDivision = async (id: string, updates: Partial<Division>): Pr
 };
 
 export const deleteDivision = async (id: string): Promise<void> => {
-    // Optional: Check if used in procurements (though currently we verify via cascading delete logic usually)
-    // For now, allow delete, but maybe warn user in UI.
     await remove(ref(db, 'divisions/' + id));
+    logActivity('delete', 'division', id, 'system', 'system');
 };
 
 // --- Stack Number Logic ---
@@ -427,6 +437,9 @@ export const addProcurement = async (
 
     await set(ref(db, 'procurements/' + id), newProcurement);
 
+    // Log the add action
+    logActivity('add', 'file', `${newProcurement.prNumber} - ${newProcurement.projectName || newProcurement.description}`, userEmail, userName);
+
     // Recalculate stack if added to a folder or box
     if (newProcurement.folderId) {
         await recalculateStackNumbers(newProcurement.folderId, undefined);
@@ -477,6 +490,11 @@ export const updateProcurement = async (
 
     await update(ref(db, 'procurements/' + id), updatePayload);
 
+    // Log the edit action
+    if (userEmail && userName) {
+        logActivity('edit', 'file', currentProcurement?.prNumber || id, userEmail, userName);
+    }
+
     // Trigger recalculation if folder or box involved
     const folderId = updates.folderId || currentProcurement?.folderId;
     const boxId = updates.boxId || currentProcurement?.boxId;
@@ -501,6 +519,7 @@ export const deleteProcurement = async (id: string): Promise<void> => {
     const currentProcurement = currentProcurementSnapshot.val() as Procurement;
 
     await remove(ref(db, 'procurements/' + id));
+    logActivity('delete', 'file', currentProcurement?.prNumber || id, 'system', 'system');
 
     if (currentProcurement?.folderId) {
         await recalculateStackNumbers(currentProcurement.folderId, undefined);
@@ -626,17 +645,18 @@ export const onUsersChange = (callback: (users: User[]) => void) => {
 };
 
 export const addUser = async (user: User): Promise<void> => {
-    // Generate ID if not provided, but usually provided by caller or randomUUID
-    // We expect user object to be fully formed except maybe ID if we generate it here
     const userId = user.id || crypto.randomUUID();
     const newUser = { ...user, id: userId, createdAt: new Date().toISOString() };
     await set(ref(db, `users/${userId}`), newUser);
+    logActivity('add', 'account', `${newUser.name} (${newUser.email})`, 'system', 'system');
 };
 
 export const updateUser = async (id: string, updates: Partial<User>): Promise<void> => {
     await update(ref(db, `users/${id}`), updates);
+    logActivity('edit', 'account', updates.name || updates.email || id, 'system', 'system');
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
     await remove(ref(db, `users/${id}`));
+    logActivity('delete', 'account', id, 'system', 'system');
 };

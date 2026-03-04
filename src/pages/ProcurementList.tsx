@@ -51,7 +51,7 @@ import {
 } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { deleteProcurement, updateProcurement, onProcurementsChange, onCabinetsChange, onShelvesChange, onFoldersChange, onDivisionsChange, onBoxesChange, recalculateAllFolders } from '@/lib/storage';
+import { deleteProcurement, updateProcurement, addProcurement, onProcurementsChange, onCabinetsChange, onShelvesChange, onFoldersChange, onDivisionsChange, onBoxesChange, recalculateAllFolders } from '@/lib/storage';
 import { Procurement, Cabinet, Shelf, Folder, Box, ProcurementStatus, UrgencyLevel, ProcurementFilters, Division } from '@/types/procurement';
 import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { DateRange } from 'react-day-picker';
@@ -85,7 +85,11 @@ import {
     Calendar as CalendarIcon,
     Package,
     Loader2,
-    Info
+    Info,
+    Upload,
+    CheckCircle2,
+    XCircle,
+    AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ProcurementProcessStatus, ProcurementType } from '@/types/core';
@@ -247,6 +251,12 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
 
     // Export Modal State
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+    // Import State
+    const [isImporting, setIsImporting] = useState(false);
+    const [isImportResultOpen, setIsImportResultOpen] = useState(false);
+    const [importResults, setImportResults] = useState<{ imported: number; skipped: string[]; errors: string[] }>({ imported: 0, skipped: [], errors: [] });
+    const importFileRef = React.useRef<HTMLInputElement>(null);
 
     // One-time automatic recalculation of stack numbers
     useEffect(() => {
@@ -1121,6 +1131,9 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                     'End User': p.division || '',
                     'ABC': p.abc ? `₱${p.abc.toLocaleString()}` : '',
                     'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
+                    'Storage Location': getLocationString(p),
+                    'Stack Number': p.stackNumber || '',
+                    'Process Status': p.procurementStatus || 'Pending',
                     'Borrowed by': p.borrowedBy || '',
                     'Borrower Division': p.borrowerDivision || '',
                     'Borrowed Date': safeFormatDate(p.borrowedDate),
@@ -1172,6 +1185,9 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                     'End User': p.division || '',
                     'ABC': p.abc ? `₱${p.abc.toLocaleString()}` : '',
                     'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
+                    'Storage Location': getLocationString(p),
+                    'Stack Number': p.stackNumber || '',
+                    'Process Status': p.procurementStatus || 'Pending',
                     'Borrowed by': p.borrowedBy || '',
                     'Borrower Division': p.borrowerDivision || '',
                     'Borrowed Date': safeFormatDate(p.borrowedDate),
@@ -1228,10 +1244,10 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                 'Project Name': p.projectName || '',
                 'Description': p.description,
                 'Division': p.division || '',
-                'Location': getLocationString(p),
                 'Status': p.status === 'active' ? 'Borrowed' : 'Archived',
-                'Progress Status': p.procurementStatus || 'Pending',
+                'Storage Location': getLocationString(p),
                 'Stack Number': p.stackNumber || '',
+                'Process Status': p.procurementStatus || 'Pending',
                 'Borrowed By': p.borrowedBy || '',
                 'Borrower Division': p.borrowerDivision || '',
                 'Borrowed Date': safeFormatDate(p.borrowedDate),
@@ -1283,6 +1299,243 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
     };
 
 
+
+    const handleDownloadTemplate = (type: 'SVP' | 'Regular Bidding') => {
+        let templateData: any = {};
+        if (type === 'SVP') {
+            templateData = {
+                'Particulars/Project name': '', 'PR Number': '', 'End User': '', 'ABC': '', 'Status': '', 'Storage Location': '', 'Stack Number': '', 'Process Status': '', 'Borrowed by': '', 'Borrower Division': '', 'Borrowed Date': '', 'Return by': '', 'Return Date': '', 'Date of Current Status': '', 'Remarks': '', 'Received PR to Action(Date)': '', 'PR Deliberated(Date)': '', 'Published(Date)': '', 'RFQ to Canvass(Date)': '', 'RFQ Opening(Date)': '', 'BAC Resolution(Date)': '', 'Forwarded to GSD for P.O(Date)': '', 'PO/NTP Forwarded to GSD(Date)': '', 'Staff in Charge': '', 'Supplier': '', 'Bid Amount': '', 'A.': '', 'B.': '', 'C.': '', 'D.': '', 'E.': '', 'F.': '', 'G.': '', 'H.': '', 'I.': '', 'J.': '', 'K.': '', 'L.': '', 'M.': '', 'N.': '', 'O.': '', 'O.2.': '', 'O.4.': '', 'P.': '', 'Q.': '', 'R.': '', 'S.': '', 'T.': ''
+            };
+        } else {
+            templateData = {
+                'Particulars/Project name': '', 'PR Number': '', 'End User': '', 'ABC': '', 'Status': '', 'Storage Location': '', 'Stack Number': '', 'Process Status': '', 'Borrowed by': '', 'Borrower Division': '', 'Borrowed Date': '', 'Return by': '', 'Return Date': '', 'Date of Current Status': '', 'Remarks': '', 'Received PR to Action(Date)': '', 'PR Deliberated(Date)': '', 'Published(Date)': '', 'Pre-Bid(Date)': '', 'Bid Opening(Date)': '', 'Bid Evaluation Report(Date)': '', 'Post Qualification(Date)': '', 'Post Qualification Report(Date)': '', 'Forwarded to OAPIA(Date)': '', 'Notice of Award(Date)': '', 'Contract Date(Date)': '', 'Notice to Proceed(Date)': '', 'Awarded to Supplier(Date)': '', 'Staff in Charge': '', 'Supplier': '', 'Bid Amount': '', 'A.': '', 'B.': '', 'C.': '', 'D.': '', 'E.': '', 'F.': '', 'G.': '', 'H.': '', 'I.': '', 'J.': '', 'K.': '', 'L.': '', 'M.': '', 'N.': '', 'O.': '', 'O.2.': '', 'O.4.': '', 'P.': '', 'Q.': '', 'R.': '', 'S.': '', 'T.': ''
+            };
+        }
+
+        const ws = XLSX.utils.json_to_sheet([templateData]);
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `import_template_${type.replace(' ', '_').toLowerCase()}.csv`;
+        link.click();
+        toast.success(`Downloaded ${type} Import Template!`);
+    };
+
+    // ── CSV Import ────────────────────────────────────────────────────
+    const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        // Reset input so the same file can be re-selected
+        e.target.value = '';
+
+        setIsImporting(true);
+        const results = { imported: 0, skipped: [] as string[], errors: [] as string[] };
+
+        try {
+            const buffer = await file.arrayBuffer();
+            const wb = XLSX.read(buffer, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+
+            if (rows.length === 0) {
+                toast.error('The CSV file is empty or unreadable.');
+                setIsImporting(false);
+                return;
+            }
+
+            // Existing PR numbers used for duplicate check
+            const existingPRs = new Set(procurements.map(p => p.prNumber.trim()));
+
+            // Helper: parse ₱-prefixed money string → number
+            const parseMoney = (v: string): number => {
+                if (!v) return 0;
+                const clean = String(v).replace(/[₱,\s]/g, '');
+                const n = parseFloat(clean);
+                return isNaN(n) ? 0 : n;
+            };
+
+            // Helper: parse date string → ISO string or undefined
+            const parseDate = (v: any): string | undefined => {
+                if (!v || String(v).trim() === '') return undefined;
+                // Try native Date parsing
+                const d = new Date(String(v));
+                if (!isNaN(d.getTime())) return d.toISOString();
+                return undefined;
+            };
+
+            // Helper: 'Yes' → true, else false
+            const yesNo = (v: any): boolean => String(v).toLowerCase().trim() === 'yes';
+
+            for (const row of rows) {
+                // Detect which export format by checking for known column names
+                const isSVP = 'Particulars/Project name' in row && 'RFQ to Canvass(Date)' in row;
+                const isRegular = 'Particulars/Project name' in row && 'Bid Opening(Date)' in row;
+                const isGeneral = 'PR Number/IB Number' in row;
+
+                // PR Number
+                const prNumber = String(row['PR Number'] || row['PR Number/IB Number'] || '').trim();
+                if (!prNumber) { results.errors.push('Row missing PR Number — skipped'); continue; }
+
+                if (existingPRs.has(prNumber)) {
+                    results.skipped.push(prNumber);
+                    continue;
+                }
+
+                try {
+                    // Status mapping
+                    const rawStatus = String(row['Status'] || '').trim().toLowerCase();
+                    const status: 'active' | 'archived' =
+                        rawStatus === 'borrowed' || rawStatus === 'active' ? 'active' : 'archived';
+
+                    // Checklist mapping (SVP/Regular: 'A.' key; General: 'A' key)
+                    const ck = (key: string) => yesNo(row[key] || row[key + '.'] || '');
+
+                    // Procurement type
+                    let procurementType: 'SVP' | 'Regular Bidding' | undefined;
+                    if (isSVP) procurementType = 'SVP';
+                    else if (isRegular) procurementType = 'Regular Bidding';
+                    else procurementType = (row['Procurement Type'] as any) || 'SVP';
+
+                    // Storage Location parsing back to IDs
+                    let boxId: string | undefined;
+                    let cabinetId: string | undefined;
+                    let shelfId: string | undefined;
+                    let folderId: string | undefined;
+
+                    const storageLocStr = String(row['Storage Location'] || row['Location'] || '').trim();
+                    if (storageLocStr && storageLocStr !== '-') {
+                        const parts = storageLocStr.split('-');
+                        if (parts.length === 2) {
+                            const b = boxes.find(x => x.code === parts[0]);
+                            const f = folders.find(x => x.code === parts[1]);
+                            if (b) boxId = b.id;
+                            if (f) folderId = f.id;
+                        } else if (parts.length === 3) {
+                            const c = cabinets.find(x => x.code === parts[0]);
+                            const s = shelves.find(x => x.code === parts[1]);
+                            const f = folders.find(x => x.code === parts[2]);
+                            if (c) cabinetId = c.id;
+                            if (s) shelfId = s.id;
+                            if (f) folderId = f.id;
+                        } else if (parts.length === 1) {
+                            const b = boxes.find(x => x.code === parts[0]);
+                            if (b) boxId = b.id;
+                        }
+                    }
+
+                    const procurement: any = {
+                        prNumber,
+                        procurementType,
+                        status,
+                        // Names / descriptions
+                        projectName: row['Particulars/Project name'] || row['Project Name'] || '',
+                        description: row['Remarks'] || row['Description'] || '',
+                        division: row['End User'] || row['Division'] || '',
+                        notes: row['Notes'] || '',
+                        supplier: row['Supplier'] || '',
+
+                        // Money
+                        abc: parseMoney(row['ABC']) || undefined,
+                        bidAmount: parseMoney(row['Bid Amount']) || undefined,
+
+                        // Borrow fields
+                        borrowedBy: row['Borrowed by'] || row['Borrowed By'] || '',
+                        borrowerDivision: row['Borrower Division'] || '',
+                        borrowedDate: parseDate(row['Borrowed Date']),
+                        returnedBy: row['Return by'] || row['Return By'] || '',
+                        returnDate: parseDate(row['Return Date']),
+                        dateStatusUpdated: parseDate(row['Date of Current Status']),
+
+                        // Process Status
+                        procurementStatus: (row['Process Status'] || row['Progress Status'] || 'Not yet Acted') as any,
+
+                        // Location IDs
+                        boxId,
+                        cabinetId,
+                        shelfId,
+                        folderId,
+
+                        // Stack / tags
+                        stackNumber: row['Stack Number'] ? parseInt(row['Stack Number']) : undefined,
+                        tags: row['Tags'] ? row['Tags'].split(',').map((t: string) => t.trim()).filter(Boolean) : [],
+
+                        // Monitoring — SVP dates
+                        receivedPrDate: parseDate(row['Received PR to Action(Date)']),
+                        prDeliberatedDate: parseDate(row['PR Deliberated(Date)']),
+                        publishedDate: parseDate(row['Published(Date)']),
+                        rfqCanvassDate: parseDate(row['RFQ to Canvass(Date)']),
+                        rfqOpeningDate: parseDate(row['RFQ Opening(Date)']),
+                        bacResolutionDate: parseDate(row['BAC Resolution(Date)']),
+                        forwardedGsdDate: parseDate(row['Forwarded to GSD for P.O(Date)']),
+                        poNtpForwardedGsdDate: parseDate(row['PO/NTP Forwarded to GSD(Date)']),
+
+                        // Monitoring — Regular Bidding dates
+                        preBidDate: parseDate(row['Pre-Bid(Date)']),
+                        bidOpeningDate: parseDate(row['Bid Opening(Date)']),
+                        bidEvaluationDate: parseDate(row['Bid Evaluation Report(Date)']),
+                        postQualDate: parseDate(row['Post Qualification(Date)']),
+                        postQualReportDate: parseDate(row['Post Qualification Report(Date)']),
+                        forwardedOapiDate: parseDate(row['Forwarded to OAPIA(Date)']),
+                        noaDate: parseDate(row['Notice of Award(Date)']),
+                        contractDate: parseDate(row['Contract Date(Date)']),
+                        ntpDate: parseDate(row['Notice to Proceed(Date)']),
+                        awardedToDate: parseDate(row['Awarded to Supplier(Date)']),
+
+                        // General export dates
+                        procurementDate: parseDate(row['Procurement Date']),
+                        dateAdded: parseDate(row['Date Added']) || new Date().toISOString(),
+
+                        // Checklist (try both 'A.' and 'A' formats)
+                        checklist: {
+                            purchaseRequest: ck('A'),
+                            certificateOfFunds: ck('B'),
+                            publicationInvitation: ck('C'),
+                            minutesPreBid: ck('D'),
+                            biddingDocuments: ck('E'),
+                            supplementalBidBulletin: ck('F'),
+                            inviteObservers: ck('G'),
+                            biddersTechFinancialProposals: ck('H'),
+                            abstractBidsOpening: ck('I'),
+                            minutesBidOpening: ck('J'),
+                            postingCertification: ck('K'),
+                            twgBidEvalReport: ck('L'),
+                            abstractBidsEvaluated: ck('M'),
+                            bacResolutionPostQual: ck('N'),
+                            noticePostQual: ck('O'),
+                            officialReceipt: ck('O.2') || ck('O.2.') || false,
+                            philgepsAwardNotice: ck('O.4') || ck('O.4.') || false,
+                            endorsementWithBacRes: ck('P'),
+                            endorsementForSignature: ck('Q'),
+                            noticeOfAward: ck('R'),
+                            contractAgreement: ck('S'),
+                            noticeToProceed: ck('T'),
+                        },
+                    };
+
+                    // Strip undefined values to keep Firebase clean
+                    Object.keys(procurement).forEach(k => procurement[k] === undefined && delete procurement[k]);
+
+                    await addProcurement(
+                        procurement,
+                        user?.email || 'import',
+                        user?.name || 'Import'
+                    );
+                    existingPRs.add(prNumber); // Prevent same-run duplicates
+                    results.imported++;
+                } catch (rowErr) {
+                    results.errors.push(`${prNumber}: ${(rowErr as Error).message}`);
+                }
+            }
+        } catch (err) {
+            toast.error('Failed to read CSV file.');
+            console.error(err);
+        }
+
+        setIsImporting(false);
+        setImportResults(results);
+        setIsImportResultOpen(true);
+    };
 
     const handleExportPDFSummary = () => {
         const doc = new jsPDF();
@@ -1444,6 +1697,48 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                             <FileText className="mr-2 h-4 w-4" />
                             Export as CSV
                         </Button>
+                    )}
+                    {/* Import CSV (admin / bac-staff only) */}
+                    {!['viewer', 'archiver'].includes(user?.role || '') && (
+                        <>
+                            <input
+                                ref={importFileRef}
+                                type="file"
+                                accept=".csv,.xlsx,.xls"
+                                className="hidden"
+                                onChange={handleImportCSV}
+                            />
+                            <Button
+                                onClick={() => importFileRef.current?.click()}
+                                disabled={isImporting}
+                                className="bg-violet-600 hover:bg-violet-700"
+                            >
+                                {isImporting ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Upload className="mr-2 h-4 w-4" />
+                                )}
+                                {isImporting ? 'Importing…' : 'Import CSV'}
+                            </Button>
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Template
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="bg-[#1e293b] border-slate-700 text-white">
+                                    <DropdownMenuItem onClick={() => handleDownloadTemplate('SVP')} className="hover:bg-slate-800 cursor-pointer">
+                                        <Download className="mr-2 h-4 w-4" /> SVP Template
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDownloadTemplate('Regular Bidding')} className="hover:bg-slate-800 cursor-pointer">
+                                        <Download className="mr-2 h-4 w-4" /> Regular Bidding Template
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </>
                     )}
                 </div>
             </div>
@@ -3284,7 +3579,83 @@ const ProcurementList: React.FC<ProcurementListProps> = ({ forcedType, pageTitle
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Import Result Modal */}
+            <Dialog open={isImportResultOpen} onOpenChange={setIsImportResultOpen}>
+                <DialogContent className="bg-[#1e293b] border-slate-800 text-white max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-xl">
+                            <Upload className="h-5 w-5 text-violet-400" />
+                            Import Complete
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Summary of CSV import results.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        {/* Counters */}
+                        <div className="grid grid-cols-3 gap-3 text-center">
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                                <p className="text-2xl font-bold text-emerald-400">{importResults.imported}</p>
+                                <p className="text-xs text-slate-400 mt-1">Imported</p>
+                            </div>
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                                <p className="text-2xl font-bold text-amber-400">{importResults.skipped.length}</p>
+                                <p className="text-xs text-slate-400 mt-1">Skipped (Duplicates)</p>
+                            </div>
+                            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                                <p className="text-2xl font-bold text-red-400">{importResults.errors.length}</p>
+                                <p className="text-xs text-slate-400 mt-1">Errors</p>
+                            </div>
+                        </div>
+
+                        {/* Skipped PRs */}
+                        {importResults.skipped.length > 0 && (
+                            <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+                                <p className="text-xs font-semibold text-amber-400 mb-2 flex items-center gap-1">
+                                    <AlertCircle className="h-3.5 w-3.5" /> Skipped — already exist in database
+                                </p>
+                                <div className="max-h-28 overflow-y-auto space-y-1">
+                                    {importResults.skipped.map((pr, i) => (
+                                        <p key={i} className="text-xs text-slate-300 font-mono">{pr}</p>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Errors */}
+                        {importResults.errors.length > 0 && (
+                            <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                                <p className="text-xs font-semibold text-red-400 mb-2 flex items-center gap-1">
+                                    <XCircle className="h-3.5 w-3.5" /> Row Errors
+                                </p>
+                                <div className="max-h-28 overflow-y-auto space-y-1">
+                                    {importResults.errors.map((err, i) => (
+                                        <p key={i} className="text-xs text-red-300 font-mono">{err}</p>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* All OK message */}
+                        {importResults.errors.length === 0 && importResults.skipped.length === 0 && importResults.imported > 0 && (
+                            <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                                <CheckCircle2 className="h-4 w-4" />
+                                All records imported successfully!
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button onClick={() => setIsImportResultOpen(false)} className="bg-violet-600 hover:bg-violet-700">
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
+
     );
 };
 
